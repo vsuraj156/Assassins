@@ -1,0 +1,76 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { createServerClient } from '@/lib/db'
+import { sendNameRejectedEmail } from '@/lib/email'
+
+async function requireAdmin() {
+  const session = await auth()
+  if (!session?.user || session.user.role !== 'admin') return null
+  return session
+}
+
+// GET /api/admin/moderation?game_id=xxx — get all pending names
+export async function GET(req: NextRequest) {
+  const session = await requireAdmin()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const gameId = req.nextUrl.searchParams.get('game_id')
+  const db = createServerClient()
+
+  const [{ data: teams }, { data: players }] = await Promise.all([
+    db.from('teams').select('id, name, name_status, name_rejection_reason, captain_player_id, players!inner(user_email, name)')
+      .eq('game_id', gameId ?? '')
+      .in('name_status', ['pending', 'rejected']),
+    db.from('players').select('id, code_name, code_name_status, code_name_rejection_reason, name, user_email')
+      .eq('game_id', gameId ?? '')
+      .in('code_name_status', ['pending', 'rejected'])
+      .not('code_name', 'is', null),
+  ])
+
+  return NextResponse.json({ teams: teams ?? [], players: players ?? [] })
+}
+
+// POST /api/admin/moderation — approve or reject a name
+export async function POST(req: NextRequest) {
+  const session = await requireAdmin()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json()
+  const { type, id, action, reason } = body
+  // type: 'team_name' | 'code_name'
+  const db = createServerClient()
+
+  if (type === 'team_name') {
+    const newStatus = action === 'approve' ? 'approved' : 'rejected'
+    const { data: team } = await db.from('teams').select('name, captain_player_id').eq('id', id).single()
+    await db.from('teams').update({
+      name_status: newStatus,
+      name_rejection_reason: action === 'reject' ? reason : null,
+    }).eq('id', id)
+
+    if (action === 'reject' && team) {
+      // Get captain email
+      const { data: captain } = await db.from('players').select('user_email, name').eq('id', team.captain_player_id ?? '').single()
+      if (captain) {
+        await sendNameRejectedEmail(captain.user_email, team.name, 'team name', reason)
+      }
+    }
+    return NextResponse.json({ success: true })
+  }
+
+  if (type === 'code_name') {
+    const newStatus = action === 'approve' ? 'approved' : 'rejected'
+    const { data: player } = await db.from('players').select('user_email, name, code_name').eq('id', id).single()
+    await db.from('players').update({
+      code_name_status: newStatus,
+      code_name_rejection_reason: action === 'reject' ? reason : null,
+    }).eq('id', id)
+
+    if (action === 'reject' && player) {
+      await sendNameRejectedEmail(player.user_email, player.code_name ?? '', 'code name', reason)
+    }
+    return NextResponse.json({ success: true })
+  }
+
+  return NextResponse.json({ error: 'Unknown type' }, { status: 400 })
+}
