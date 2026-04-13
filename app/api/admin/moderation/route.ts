@@ -17,15 +17,13 @@ export async function GET(req: NextRequest) {
   const gameId = req.nextUrl.searchParams.get('game_id')
   const db = createServerClient()
 
-  const [{ data: teams }, { data: players }] = await Promise.all([
-    db.from('teams').select('id, name, name_status, name_rejection_reason, captain_player_id, players!inner(user_email, name)')
-      .eq('game_id', gameId ?? '')
-      .in('name_status', ['pending', 'rejected']),
-    db.from('players').select('id, code_name, code_name_status, code_name_rejection_reason, name, user_email')
-      .eq('game_id', gameId ?? '')
-      .in('code_name_status', ['pending', 'rejected'])
-      .not('code_name', 'is', null),
-  ])
+  let teamsQuery = db.from('teams').select('id, name, name_status, name_rejection_reason, captain_player_id').in('name_status', ['pending', 'rejected'])
+  let playersQuery = db.from('players').select('id, code_name, code_name_status, code_name_rejection_reason, name, user_email').in('code_name_status', ['pending', 'rejected']).not('code_name', 'is', null)
+  if (gameId) {
+    teamsQuery = teamsQuery.eq('game_id', gameId)
+    playersQuery = playersQuery.eq('game_id', gameId)
+  }
+  const [{ data: teams }, { data: players }] = await Promise.all([teamsQuery, playersQuery])
 
   return NextResponse.json({ teams: teams ?? [], players: players ?? [] })
 }
