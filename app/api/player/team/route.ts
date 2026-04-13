@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     // Find team by invite code
     const { data: team } = await db
       .from('teams')
-      .select('*, players(id)')
+      .select('*, players!team_id(id)')
       .eq('invite_code', invite_code.toUpperCase())
       .single()
 

@@ -7,7 +7,7 @@ export default async function AdminDashboard() {
 
   const [{ data: games }, { data: recentElims }, { data: pendingCheckins }, { data: pendingWars }] =
     await Promise.all([
-      db.from('games').select('*, teams(count), players(count)').order('created_at', { ascending: false }),
+      db.from('games').select('*, teams!game_id(count), players!game_id(count)').order('created_at', { ascending: false }),
       db.from('eliminations').select('*, killer:players!killer_id(name), target:players!target_id(name), killer_team:teams!killer_team_id(name)')
         .eq('status', 'pending').order('timestamp', { ascending: false }).limit(10),
       db.from('checkins').select('id').eq('status', 'pending'),

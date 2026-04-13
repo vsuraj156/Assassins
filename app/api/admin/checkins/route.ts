@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const status = req.nextUrl.searchParams.get('status')
   const db = createServerClient()
 
-  let query = db.from('checkins').select('*, player:players(id, name, user_email, team_id, photo_url, team:teams(id, name))')
+  let query = db.from('checkins').select('*, player:players(id, name, user_email, team_id, photo_url, team:teams!team_id(id, name))')
   if (gameId) query = query.eq('game_id', gameId)
   if (status) query = query.eq('status', status)
   const { data, error } = await query.order('submitted_at', { ascending: false })

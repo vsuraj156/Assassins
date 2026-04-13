@@ -29,7 +29,7 @@ export default async function PlayerDashboard() {
   const [{ data: player }, { data: stuns }, teamResult, gameResult] = await Promise.all([
     db.from('players').select('*, team:teams(id, name, points, status, target_team_id, last_elimination_at)').eq('id', session.user.playerId).single(),
     db.from('stuns').select('*').eq('stunned_by_id', session.user.playerId).gt('expires_at', new Date().toISOString()),
-    session.user.teamId ? db.from('teams').select('*, players(id, name, status, is_double_0)').eq('id', session.user.teamId).single() : Promise.resolve({ data: null, error: null }),
+    session.user.teamId ? db.from('teams').select('*, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single() : Promise.resolve({ data: null, error: null }),
     session.user.gameId ? db.from('games').select('name, status, totem_description').eq('id', session.user.gameId).single() : Promise.resolve({ data: null, error: null }),
   ])
 

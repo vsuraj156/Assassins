@@ -12,7 +12,7 @@ export default async function LeaderboardPage() {
 
   const { data: teams } = await db
     .from('teams')
-    .select('*, players(id, name, status, is_double_0)')
+    .select('*, players!team_id(id, name, status, is_double_0)')
     .eq('game_id', gameId)
     .order('points', { ascending: false })
 

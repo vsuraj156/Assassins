@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const gameId = req.nextUrl.searchParams.get('game_id')
   const db = createServerClient()
 
-  let query = db.from('players').select('*, team:teams(id, name, status, points)')
+  let query = db.from('players').select('*, team:teams!team_id(id, name, status, points)')
   if (gameId) query = query.eq('game_id', gameId)
   const { data, error } = await query.order('name')
 
