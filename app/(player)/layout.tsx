@@ -1,4 +1,4 @@
-import { auth, signOut } from '@/lib/auth'
+import { auth, signOut, isMultiProfileEmail } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
@@ -17,6 +17,8 @@ export default async function PlayerLayout({ children }: { children: React.React
   if (!session?.user) redirect('/')
   if (!session.user.playerId) redirect('/signup/create-team')
 
+  const showProfileSwitcher = session.user.email ? isMultiProfileEmail(session.user.email) : false
+
   return (
     <div className="min-h-screen bg-black">
       <nav className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
@@ -33,16 +35,26 @@ export default async function PlayerLayout({ children }: { children: React.React
               </Link>
             ))}
           </div>
-          <form
-            action={async () => {
-              'use server'
-              await signOut({ redirectTo: '/' })
-            }}
-          >
-            <button className="text-xs text-zinc-500 hover:text-white transition-colors px-2 py-1">
-              Sign out
-            </button>
-          </form>
+          <div className="flex items-center gap-2">
+            {showProfileSwitcher && (
+              <Link
+                href="/switch-profile"
+                className="text-xs text-zinc-500 hover:text-white transition-colors px-2 py-1"
+              >
+                Switch Profile
+              </Link>
+            )}
+            <form
+              action={async () => {
+                'use server'
+                await signOut({ redirectTo: '/' })
+              }}
+            >
+              <button className="text-xs text-zinc-500 hover:text-white transition-colors px-2 py-1">
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       </nav>
       <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>

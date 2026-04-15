@@ -1,6 +1,14 @@
 import NextAuth from 'next-auth'
 import Google from 'next-auth/providers/google'
+import { cookies } from 'next/headers'
 import { createServerClient } from './db'
+
+function isMultiProfileEmail(email: string): boolean {
+  const allowed = (process.env.MULTI_PROFILE_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase())
+  return allowed.includes(email.toLowerCase())
+}
+
+export { isMultiProfileEmail }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -14,13 +22,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!session.user?.email) return session
 
       const db = createServerClient()
-      const { data: player } = await db
+
+      let activePlayerId: string | undefined
+      if (isMultiProfileEmail(session.user.email)) {
+        try {
+          const cookieStore = await cookies()
+          activePlayerId = cookieStore.get('active_player_id')?.value
+        } catch {
+          // cookies() throws outside request context (e.g. during build)
+        }
+      }
+
+      let query = db
         .from('players')
         .select('id, role, status, team_id, game_id, name, photo_url, code_name')
         .eq('user_email', session.user.email)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+
+      if (activePlayerId) {
+        query = query.eq('id', activePlayerId)
+      } else {
+        query = query.order('created_at', { ascending: false }).limit(1)
+      }
+
+      const { data: player } = await query.single()
 
       if (player) {
         session.user.playerId = player.id

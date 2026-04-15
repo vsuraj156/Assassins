@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { auth, isMultiProfileEmail } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
 import { generateInviteCode } from '@/lib/game-engine'
 
@@ -20,15 +20,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Game is not open for signup' }, { status: 400 })
     }
 
-    // Check player doesn't already have a team in this game
-    const { data: existingPlayer } = await db
-      .from('players')
-      .select('id')
-      .eq('game_id', game_id)
-      .eq('user_email', session.user.email)
-      .single()
-    if (existingPlayer) {
-      return NextResponse.json({ error: 'You are already registered in this game' }, { status: 409 })
+    // Check player doesn't already have a team in this game (unless multi-profile is allowed)
+    if (!isMultiProfileEmail(session.user.email)) {
+      const { data: existingPlayer } = await db
+        .from('players')
+        .select('id')
+        .eq('game_id', game_id)
+        .eq('user_email', session.user.email)
+        .single()
+      if (existingPlayer) {
+        return NextResponse.json({ error: 'You are already registered in this game' }, { status: 409 })
+      }
     }
 
     // Generate unique invite code
@@ -86,15 +88,17 @@ export async function POST(req: NextRequest) {
     if (team.game_id !== game_id) return NextResponse.json({ error: 'Invalid invite code for this game' }, { status: 400 })
     if ((team.players?.length ?? 0) >= 6) return NextResponse.json({ error: 'Team is full (max 6 players)' }, { status: 400 })
 
-    // Check player doesn't already have a team in this game
-    const { data: existingPlayer } = await db
-      .from('players')
-      .select('id')
-      .eq('game_id', game_id)
-      .eq('user_email', session.user.email)
-      .single()
-    if (existingPlayer) {
-      return NextResponse.json({ error: 'You are already registered in this game' }, { status: 409 })
+    // Check player doesn't already have a team in this game (unless multi-profile is allowed)
+    if (!isMultiProfileEmail(session.user.email)) {
+      const { data: existingPlayer } = await db
+        .from('players')
+        .select('id')
+        .eq('game_id', game_id)
+        .eq('user_email', session.user.email)
+        .single()
+      if (existingPlayer) {
+        return NextResponse.json({ error: 'You are already registered in this game' }, { status: 409 })
+      }
     }
 
     const { data: player, error } = await db

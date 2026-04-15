@@ -11,11 +11,11 @@ export default function CreateTeamPage() {
   const [playerName, setPlayerName] = useState('')
   const [codeName, setCodeName] = useState('')
   const [gameId, setGameId] = useState('')
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // In production, the game_id would come from a game lookup or be set by admin
-  // For now, players must enter the game ID (admin shares it)
   async function handleCreate() {
     if (!teamName || !playerName || !gameId) {
       setError('Please fill in all required fields.')
@@ -41,6 +41,27 @@ export default function CreateTeamPage() {
       setError(data.error)
       setLoading(false)
       return
+    }
+
+    // Upload profile photo if selected
+    if (photoFile && data.player?.id) {
+      try {
+        const urlRes = await fetch('/api/player/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_upload_url', player_id: data.player.id }),
+        })
+        const { signedUrl, path } = await urlRes.json()
+        await fetch(signedUrl, { method: 'PUT', body: photoFile, headers: { 'Content-Type': photoFile.type } })
+        const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/assassins/${path}`
+        await fetch('/api/player/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'save', player_id: data.player.id, photo_url: publicUrl }),
+        })
+      } catch {
+        // Non-fatal: player can update photo later
+      }
     }
 
     setInviteCode(data.team.invite_code)
@@ -126,6 +147,33 @@ export default function CreateTeamPage() {
             onChange={(e) => setCodeName(e.target.value)}
           />
           <p className="text-xs text-zinc-600 mt-1">Subject to admin approval.</p>
+        </div>
+
+        <div>
+          <label className="block text-sm text-zinc-300 mb-2">Profile Photo <span className="text-zinc-500">(optional)</span></label>
+          <div
+            className="rounded-lg border border-dashed border-zinc-700 bg-zinc-900 p-4 text-center cursor-pointer hover:border-zinc-500 transition-colors"
+            onClick={() => document.getElementById('photo-input-create')?.click()}
+          >
+            {photoPreview ? (
+              <img src={photoPreview} alt="Preview" className="w-24 h-24 mx-auto rounded-full object-cover" />
+            ) : (
+              <div className="space-y-1">
+                <p className="text-zinc-400 text-sm">Click to select a photo</p>
+                <p className="text-zinc-600 text-xs">Clear face shot — helps teammates identify targets</p>
+              </div>
+            )}
+          </div>
+          <input
+            id="photo-input-create"
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)) }
+            }}
+          />
         </div>
 
         {error && <p className="text-red-400 text-sm">{error}</p>}

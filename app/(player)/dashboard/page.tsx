@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
 import Link from 'next/link'
+import TeamRosterCard from './TeamRosterCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +30,7 @@ export default async function PlayerDashboard() {
   const [{ data: player }, { data: stuns }, teamResult, gameResult] = await Promise.all([
     db.from('players').select('*, team:teams(id, name, points, status, target_team_id, last_elimination_at)').eq('id', session.user.playerId).single(),
     db.from('stuns').select('*').eq('stunned_by_id', session.user.playerId).gt('expires_at', new Date().toISOString()),
-    session.user.teamId ? db.from('teams').select('*, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single() : Promise.resolve({ data: null, error: null }),
+    session.user.teamId ? db.from('teams').select('*, captain_player_id, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single() : Promise.resolve({ data: null, error: null }),
     session.user.gameId ? db.from('games').select('name, status, totem_description').eq('id', session.user.gameId).single() : Promise.resolve({ data: null, error: null }),
   ])
 
@@ -89,25 +90,10 @@ export default async function PlayerDashboard() {
 
       {/* Team card */}
       {team.data && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-white">Team: {team.data.name}</h2>
-            <span className="text-zinc-400 text-sm">{team.data.points} pts</span>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {team.data.players?.map((p: { id: string; name: string; status: string; is_double_0: boolean }) => (
-              <div key={p.id} className={`text-xs rounded px-2 py-1.5 border ${
-                p.status === 'terminated' ? 'border-red-900 text-red-400 bg-red-950/20' :
-                p.status === 'wanted' ? 'border-orange-800 text-orange-400' :
-                p.status === 'exposed' ? 'border-yellow-800 text-yellow-400' :
-                'border-zinc-700 text-zinc-300'
-              }`}>
-                {p.name} {p.is_double_0 && '(00)'}
-                <span className="ml-1 opacity-60">{p.status}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <TeamRosterCard
+          team={team.data}
+          currentPlayerId={session.user.playerId}
+        />
       )}
 
       {/* Active stuns */}
