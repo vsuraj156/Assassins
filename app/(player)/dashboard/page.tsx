@@ -21,6 +21,13 @@ const statusMessage: Record<string, string> = {
   amnesty: 'You are under amnesty.',
 }
 
+function killTimerStyle(hours: number | null) {
+  if (hours === null || hours <= 6)  return { border: 'border-red-800',    text: 'text-red-400',    bg: 'bg-red-950/20' }
+  if (hours <= 12)                   return { border: 'border-orange-800', text: 'text-orange-400', bg: 'bg-orange-950/20' }
+  if (hours <= 24)                   return { border: 'border-yellow-800', text: 'text-yellow-400', bg: 'bg-yellow-950/10' }
+  return                                    { border: 'border-zinc-700',   text: 'text-zinc-300',   bg: '' }
+}
+
 export default async function PlayerDashboard() {
   const session = await auth()
   if (!session?.user?.playerId) return null
@@ -28,23 +35,64 @@ export default async function PlayerDashboard() {
   const db = createServerClient()
 
   const [{ data: player }, { data: stuns }, teamResult, gameResult] = await Promise.all([
-    db.from('players').select('*, team:teams(id, name, points, status, target_team_id, last_elimination_at)').eq('id', session.user.playerId).single(),
-    db.from('stuns').select('*').eq('stunned_by_id', session.user.playerId).gt('expires_at', new Date().toISOString()),
-    session.user.teamId ? db.from('teams').select('*, captain_player_id, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single() : Promise.resolve({ data: null, error: null }),
-    session.user.gameId ? db.from('games').select('name, status, totem_description').eq('id', session.user.gameId).single() : Promise.resolve({ data: null, error: null }),
+    db.from('players')
+      .select('*, team:teams!team_id(id, name, points, status, target_team_id, last_elimination_at)')
+      .eq('id', session.user.playerId)
+      .single(),
+    db.from('stuns')
+      .select('*')
+      .eq('stunned_by_id', session.user.playerId)
+      .gt('expires_at', new Date().toISOString()),
+    session.user.teamId
+      ? db.from('teams').select('*, captain_player_id, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single()
+      : Promise.resolve({ data: null, error: null }),
+    session.user.gameId
+      ? db.from('games').select('name, status, totem_description, kill_blackout_hours').eq('id', session.user.gameId).single()
+      : Promise.resolve({ data: null, error: null }),
   ])
 
   const today = new Date().toISOString().slice(0, 10)
-  const { data: todayCheckin } = await db
-    .from('checkins')
-    .select('status')
-    .eq('player_id', session.user.playerId)
-    .eq('meal_date', today)
-    .single()
+  const teamData = player?.team as {
+    id: string; name: string; points: number; status: string
+    target_team_id: string | null; last_elimination_at: string | null
+  } | null
+
+  // Second batch — needs player/team data resolved first
+  const [checkinResult, targetTeamResult, higherRankResult, totalTeamsResult] = await Promise.all([
+    db.from('checkins').select('status').eq('player_id', session.user.playerId).eq('meal_date', today).single(),
+    teamData?.target_team_id
+      ? db.from('teams').select('name').eq('id', teamData.target_team_id).single()
+      : Promise.resolve({ data: null }),
+    session.user.gameId
+      ? db.from('teams').select('*', { count: 'exact', head: true }).eq('game_id', session.user.gameId).eq('status', 'active').gt('points', teamData?.points ?? -1)
+      : Promise.resolve({ count: null }),
+    session.user.gameId
+      ? db.from('teams').select('*', { count: 'exact', head: true }).eq('game_id', session.user.gameId).eq('status', 'active')
+      : Promise.resolve({ count: null }),
+  ])
+
+  const todayCheckin = checkinResult.data
+  const targetTeamName = (targetTeamResult as { data: { name: string } | null }).data?.name ?? null
+  const teamRank = ((higherRankResult as { count: number | null }).count ?? 0) + 1
+  const totalActiveTeams = (totalTeamsResult as { count: number | null }).count ?? 0
 
   const team = teamResult
   const game = gameResult
   const statusClass = statusColor[player?.status ?? 'active'] ?? 'text-zinc-400 border-zinc-700'
+
+  // Kill timer
+  const gameIsActive = game?.data?.status === 'active'
+  const teamIsActive = teamData?.status === 'active'
+  const playerAlive = player?.status !== 'terminated'
+  const killBlackoutHours: number = (game?.data as { kill_blackout_hours?: number } | null)?.kill_blackout_hours ?? 48
+
+  let killHoursLeft: number | null = null // null = no kills yet (already at risk)
+  if (gameIsActive && teamIsActive && playerAlive && teamData?.last_elimination_at) {
+    const deadline = new Date(teamData.last_elimination_at).getTime() + killBlackoutHours * 60 * 60 * 1000
+    killHoursLeft = Math.max(0, (deadline - Date.now()) / (1000 * 60 * 60))
+  }
+  const showKillTimer = gameIsActive && teamIsActive && playerAlive
+  const timerStyle = killTimerStyle(killHoursLeft)
 
   return (
     <div className="space-y-6">
@@ -66,25 +114,67 @@ export default async function PlayerDashboard() {
         <p className="text-sm mt-3 text-zinc-400">{statusMessage[player?.status ?? 'active']}</p>
       </div>
 
+      {/* Kill timer */}
+      {showKillTimer && (
+        <div className={`rounded-xl border p-4 ${timerStyle.border} ${timerStyle.bg}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs text-zinc-500 mb-0.5">Team Kill Timer</div>
+              <div className={`text-sm font-semibold ${timerStyle.text}`}>
+                {killHoursLeft === null
+                  ? 'No kills yet — your team is at risk'
+                  : killHoursLeft < 1
+                  ? 'Under 1 hour remaining!'
+                  : `${Math.floor(killHoursLeft)}h ${Math.floor((killHoursLeft % 1) * 60)}m remaining`}
+              </div>
+            </div>
+            <div className="text-xs text-zinc-600">{killBlackoutHours}h window</div>
+          </div>
+          {(killHoursLeft === null || killHoursLeft <= 12) && (
+            <p className="text-xs text-zinc-500 mt-2">
+              A random active teammate will be exposed if no kill is made in time.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Quick actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Link href="/checkin" className={`rounded-xl border p-4 text-center transition-colors hover:bg-zinc-900 ${todayCheckin?.status === 'approved' ? 'border-green-800 bg-green-950/20' : todayCheckin?.status === 'pending' ? 'border-yellow-800' : 'border-red-900 bg-red-950/20'}`}>
+        <Link
+          href="/checkin"
+          className={`rounded-xl border p-4 text-center transition-colors hover:bg-zinc-900 ${
+            todayCheckin?.status === 'approved' ? 'border-green-800 bg-green-950/20' :
+            todayCheckin?.status === 'pending'  ? 'border-yellow-800' :
+            'border-red-900 bg-red-950/20'
+          }`}
+        >
           <div className="text-xs text-zinc-400 mb-1">Today's Check-in</div>
-          <div className={`text-sm font-semibold ${todayCheckin?.status === 'approved' ? 'text-green-400' : todayCheckin?.status === 'pending' ? 'text-yellow-400' : 'text-red-400'}`}>
+          <div className={`text-sm font-semibold ${
+            todayCheckin?.status === 'approved' ? 'text-green-400' :
+            todayCheckin?.status === 'pending'  ? 'text-yellow-400' :
+            'text-red-400'
+          }`}>
             {todayCheckin?.status ?? 'Not submitted'}
           </div>
         </Link>
+
         <Link href="/target" className="rounded-xl border border-zinc-800 p-4 text-center hover:bg-zinc-900 transition-colors">
           <div className="text-xs text-zinc-400 mb-1">My Target</div>
-          <div className="text-sm font-semibold text-white">View →</div>
+          <div className="text-sm font-semibold text-white truncate">
+            {targetTeamName ?? 'View →'}
+          </div>
         </Link>
+
         <Link href="/elimination" className="rounded-xl border border-zinc-800 p-4 text-center hover:bg-zinc-900 transition-colors">
           <div className="text-xs text-zinc-400 mb-1">Report Kill</div>
           <div className="text-sm font-semibold text-white">Submit →</div>
         </Link>
+
         <Link href="/leaderboard" className="rounded-xl border border-zinc-800 p-4 text-center hover:bg-zinc-900 transition-colors">
           <div className="text-xs text-zinc-400 mb-1">Leaderboard</div>
-          <div className="text-sm font-semibold text-white">View →</div>
+          <div className="text-sm font-semibold text-white">
+            {totalActiveTeams > 0 ? `#${teamRank} of ${totalActiveTeams}` : 'View →'}
+          </div>
         </Link>
       </div>
 
