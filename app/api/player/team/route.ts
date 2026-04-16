@@ -128,6 +128,12 @@ export async function POST(req: NextRequest) {
     const { data: player } = await db.from('players').select('team_id, game_id').eq('id', player_id).single()
     if (!player) return NextResponse.json({ error: 'Player not found' }, { status: 404 })
 
+    // Lock once game has started
+    const { data: game } = await db.from('games').select('status').eq('id', player.game_id).single()
+    if (game && game.status !== 'signup') {
+      return NextResponse.json({ error: 'Double-0 cannot be changed after the game has started' }, { status: 403 })
+    }
+
     // Verify session user is captain of this team
     const { data: team } = await db.from('teams').select('captain_player_id').eq('id', player.team_id).single()
     const { data: sessionPlayer } = await db

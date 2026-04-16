@@ -93,6 +93,7 @@ export default async function PlayerDashboard() {
         <TeamRosterCard
           team={team.data}
           currentPlayerId={session.user.playerId}
+          gameStatus={game?.data?.status ?? 'signup'}
         />
       )}
 

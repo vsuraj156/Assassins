@@ -20,14 +20,17 @@ interface Team {
 export default function TeamRosterCard({
   team: initialTeam,
   currentPlayerId,
+  gameStatus,
 }: {
   team: Team
   currentPlayerId?: string
+  gameStatus?: string
 }) {
   const [players, setPlayers] = useState<TeamPlayer[]>(initialTeam.players ?? [])
   const [loading, setLoading] = useState(false)
 
   const isCaptain = currentPlayerId && initialTeam.captain_player_id === currentPlayerId
+  const canChangeDouble0 = isCaptain && gameStatus === 'signup'
 
   async function setDouble0(playerId: string) {
     setLoading(true)
@@ -67,7 +70,7 @@ export default function TeamRosterCard({
               <span className="ml-1.5 opacity-60">{p.status}</span>
             </span>
 
-            {isCaptain && p.status !== 'terminated' && (
+            {canChangeDouble0 && p.status !== 'terminated' && (
               <button
                 onClick={() => setDouble0(p.id)}
                 disabled={loading}
@@ -85,7 +88,11 @@ export default function TeamRosterCard({
       </div>
 
       {isCaptain && (
-        <p className="text-xs text-zinc-600 mt-3">As captain, you can designate one teammate as the Double-0 agent.</p>
+        <p className="text-xs text-zinc-600 mt-3">
+          {canChangeDouble0
+            ? 'As captain, you can designate one teammate as the Double-0 agent.'
+            : 'Double-0 designation is locked once the game starts.'}
+        </p>
       )}
     </div>
   )
