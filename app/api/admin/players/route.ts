@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
+import { sendStatusChangeEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await auth()
@@ -61,12 +62,12 @@ export async function PATCH(req: NextRequest) {
   const { player_id, ...updates } = body
   const db = createServerClient()
 
-  const { data: oldPlayer } = await db.from('players').select('status').eq('id', player_id).single()
+  const { data: oldPlayer } = await db.from('players').select('status, name, user_email').eq('id', player_id).single()
 
   const { data, error } = await db.from('players').update(updates).eq('id', player_id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Log status change
+  // Log status change and notify player
   if (updates.status && oldPlayer && updates.status !== oldPlayer.status) {
     await db.from('status_history').insert({
       entity_type: 'player',
@@ -76,6 +77,13 @@ export async function PATCH(req: NextRequest) {
       reason: updates.reason ?? 'Admin override',
       changed_by: session.user.playerId ?? null,
     })
+    await sendStatusChangeEmail(
+      oldPlayer.user_email,
+      oldPlayer.name,
+      oldPlayer.status,
+      updates.status,
+      updates.reason ?? 'Admin override'
+    )
   }
 
   return NextResponse.json(data)

@@ -1,21 +1,33 @@
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 
-const FROM = 'Quincy Assassins <noreply@quincyassassins.com>'
+const FROM = 'Quincy Assassins <quincyassassins@gmail.com>'
 
-interface EmailOptions {
-  to: string
-  subject: string
-  html: string
+function createTransport() {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    return null
+  }
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  })
 }
 
-async function send(opts: EmailOptions) {
-  if (!process.env.RESEND_API_KEY) {
-    console.warn('RESEND_API_KEY not set — skipping email')
+async function send({ to, subject, html }: { to: string; subject: string; html: string }) {
+  const transporter = createTransport()
+  if (!transporter) {
+    console.warn('Gmail credentials not set — skipping email')
     return
   }
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const { error } = await resend.emails.send({ from: FROM, ...opts })
-  if (error) console.error('Email send error:', error)
+  try {
+    await transporter.sendMail({ from: FROM, to, subject, html })
+  } catch (err) {
+    console.error('Email send error:', err)
+  }
 }
 
 export async function sendStatusChangeEmail(
@@ -76,6 +88,32 @@ export async function sendNameRejectedEmail(
       <p>Your ${type} "<strong>${name}</strong>" was rejected.</p>
       <p>Reason: ${reason}</p>
       <p>Please log in and submit a new ${type}.</p>
+    `,
+  })
+}
+
+export async function sendKillClaimEmail(to: string, targetName: string, killerName: string) {
+  await send({
+    to,
+    subject: '[Quincy Assassins] A kill claim has been filed against you',
+    html: `
+      <h2>Kill Claim Filed</h2>
+      <p>Hi ${targetName},</p>
+      <p><strong>${killerName}</strong> has filed a kill claim against you. An admin will review it shortly.</p>
+      <p>Log in to see your current status.</p>
+    `,
+  })
+}
+
+export async function sendCheckinRejectedEmail(to: string, playerName: string) {
+  await send({
+    to,
+    subject: '[Quincy Assassins] Your check-in was rejected',
+    html: `
+      <h2>Check-in Rejected</h2>
+      <p>Hi ${playerName},</p>
+      <p>Your check-in submission was rejected by an admin. Please resubmit with a valid meal photo.</p>
+      <p>Remember: you need an approved check-in before midnight or your status will be updated.</p>
     `,
   })
 }

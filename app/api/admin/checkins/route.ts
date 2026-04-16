@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
-import { sendStatusChangeEmail } from '@/lib/email'
+import { sendStatusChangeEmail, sendCheckinRejectedEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await auth()
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   // Fetch checkin first so we have player_id and meal_date for recovery logic
   const { data: checkin } = await db
     .from('checkins')
-    .select('player_id, meal_date')
+    .select('player_id, meal_date, player:players!player_id(name, user_email)')
     .eq('id', checkin_id)
     .single()
 
@@ -54,6 +54,14 @@ export async function POST(req: NextRequest) {
     .eq('id', checkin_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // On rejection: notify the player
+  if (action === 'reject') {
+    const player = (Array.isArray(checkin.player) ? checkin.player[0] : checkin.player) as { name: string; user_email: string } | null
+    if (player) {
+      await sendCheckinRejectedEmail(player.user_email, player.name)
+    }
+  }
 
   // On approval: check if player now has 3 approved check-ins on this meal_date
   if (action === 'approve') {

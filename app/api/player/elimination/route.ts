@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
 import { isKillValid, eliminationPoints } from '@/lib/game-engine'
+import { sendKillClaimEmail } from '@/lib/email'
 
 // POST /api/player/elimination — submit a kill claim
 export async function POST(req: NextRequest) {
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   // Load killer info
   const { data: killer } = await db
     .from('players')
-    .select('id, game_id, team_id, status, is_double_0, is_rogue')
+    .select('id, name, game_id, team_id, status, is_double_0, is_rogue')
     .eq('id', session.user.playerId)
     .single()
 
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   // Load target info
   const { data: target } = await db
     .from('players')
-    .select('id, team_id, status, is_double_0, is_rogue')
+    .select('id, name, user_email, team_id, status, is_double_0, is_rogue')
     .eq('id', target_player_id)
     .single()
 
@@ -95,6 +96,12 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Notify the target that a claim was filed against them
+  if (target.user_email) {
+    await sendKillClaimEmail(target.user_email, target.name, killer?.name ?? 'Someone')
+  }
+
   return NextResponse.json(data, { status: 201 })
 }
 
