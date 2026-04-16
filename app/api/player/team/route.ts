@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       .single()
     if (teamError) return NextResponse.json({ error: teamError.message }, { status: 500 })
 
-    // Create player record
+    // Create player record — captain is Double-0 by default
     const { data: player, error: playerError } = await db
       .from('players')
       .insert({
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
         name: player_name,
         role: 'player',
         status: 'active',
+        is_double_0: true,
         code_name: code_name ?? null,
         code_name_status: code_name ? 'pending' : 'approved',
       })

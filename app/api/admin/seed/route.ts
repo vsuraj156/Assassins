@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
           name,
           role: 'player',
           status: 'active',
-          is_double_0: false,
+          is_double_0: i === 0, // first player (captain) is Double-0 by default
           is_rogue: false,
           code_name_status: 'approved',
         })
@@ -136,15 +136,31 @@ export async function DELETE(req: NextRequest) {
 
   const db = createServerClient()
 
+  // Find seed players first
+  const { data: seedPlayers } = await db
+    .from('players')
+    .select('id, team_id')
+    .eq('game_id', game_id)
+    .like('user_email', '%@test.assassins')
+
+  if (!seedPlayers?.length) return NextResponse.json({ success: true, deleted: 0 })
+
+  const teamIds = [...new Set(seedPlayers.map((p) => p.team_id).filter(Boolean))]
+
+  // Null out captain references to break the circular FK before deleting players
+  for (const teamId of teamIds) {
+    await db.from('teams').update({ captain_player_id: null }).eq('id', teamId)
+  }
+
+  // Now delete the seed players
   const { data: deleted } = await db
     .from('players')
     .delete()
     .eq('game_id', game_id)
     .like('user_email', '%@test.assassins')
-    .select('id, team_id')
+    .select('id')
 
-  // Clean up any teams that are now empty
-  const teamIds = [...new Set(deleted?.map((p) => p.team_id).filter(Boolean))]
+  // Delete the now-empty teams
   for (const teamId of teamIds) {
     const { data: remaining } = await db.from('players').select('id').eq('team_id', teamId)
     if (!remaining || remaining.length === 0) {
