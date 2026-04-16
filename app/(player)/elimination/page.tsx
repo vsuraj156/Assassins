@@ -18,6 +18,8 @@ interface Elimination {
 
 export default function EliminationPage() {
   const [targetPlayers, setTargetPlayers] = useState<Player[]>([])
+  const [warTargets, setWarTargets] = useState<{ teamName: string; players: Player[] }[]>([])
+  const [double0Targets, setDouble0Targets] = useState<Player[]>([])
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
@@ -34,6 +36,8 @@ export default function EliminationPage() {
     const res = await fetch('/api/player/target')
     const data = await res.json()
     setTargetPlayers(data.target?.players ?? [])
+    setWarTargets(data.warTargets ?? [])
+    setDouble0Targets(data.double0Targets ?? [])
   }
 
   async function fetchMyElims() {
@@ -82,7 +86,7 @@ export default function EliminationPage() {
         <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-6 space-y-5">
           <div>
             <label className="block text-sm text-zinc-300 mb-2">Target player</label>
-            {targetPlayers.length === 0 ? (
+            {targetPlayers.length === 0 && warTargets.length === 0 && double0Targets.length === 0 ? (
               <p className="text-zinc-500 text-sm">No target team assigned, or target is fully eliminated.</p>
             ) : (
               <select
@@ -91,9 +95,27 @@ export default function EliminationPage() {
                 onChange={(e) => setSelectedPlayerId(e.target.value)}
               >
                 <option value="">Select target...</option>
-                {targetPlayers.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                {targetPlayers.length > 0 && (
+                  <optgroup label="Assigned Target">
+                    {targetPlayers.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {warTargets.map((wt) => (
+                  <optgroup key={wt.teamName} label={`At War: ${wt.teamName}`}>
+                    {wt.players.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </optgroup>
                 ))}
+                {double0Targets.length > 0 && (
+                  <optgroup label="Double-0 Agents">
+                    {double0Targets.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} (00)</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             )}
           </div>
