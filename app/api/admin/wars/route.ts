@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data)
 }
 
-// POST /api/admin/wars — approve or end war
+// POST /api/admin/wars — create, approve, end, or reject a war
 export async function POST(req: NextRequest) {
   const session = await requireAdmin()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -40,6 +40,39 @@ export async function POST(req: NextRequest) {
   const { war_id, action } = body
   const db = createServerClient()
   const now = new Date().toISOString()
+
+  if (action === 'create') {
+    const { game_id, team1_id, team2_id, reason } = body
+    if (!game_id || !team1_id || !team2_id) {
+      return NextResponse.json({ error: 'game_id, team1_id, and team2_id are required' }, { status: 400 })
+    }
+    if (team1_id === team2_id) {
+      return NextResponse.json({ error: 'A team cannot declare war on itself' }, { status: 400 })
+    }
+
+    // Admin's player record is the requester
+    const { data: adminPlayer } = await db
+      .from('players')
+      .select('id')
+      .eq('user_email', session.user.email!)
+      .eq('game_id', game_id)
+      .single()
+
+    if (!adminPlayer) return NextResponse.json({ error: 'Admin player record not found for this game' }, { status: 404 })
+
+    const { data, error } = await db.from('wars').insert({
+      game_id,
+      team1_id,
+      team2_id,
+      status: 'active',
+      requested_by_player_id: adminPlayer.id,
+      reason: reason || null,
+      approved_at: now,
+    }).select().single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data, { status: 201 })
+  }
 
   if (action === 'approve') {
     const { error } = await db.from('wars').update({ status: 'active', approved_at: now }).eq('id', war_id)
