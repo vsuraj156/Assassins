@@ -152,6 +152,58 @@ export default function GameControlPage() {
             </div>
           </section>
 
+          {/* Seed Data */}
+          {currentGame.status === 'signup' && (
+            <section className="rounded-xl border border-zinc-700 bg-zinc-950 p-6 space-y-4">
+              <div>
+                <h2 className="font-semibold text-white">Seed Test Data</h2>
+                <p className="text-xs text-zinc-400 mt-1">Creates 10 teams with 3–6 players each using fake accounts. All names pre-approved. For testing only.</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    if (!confirm('Seed 10 fake teams into this game?')) return
+                    setLoading(true)
+                    setMsg('')
+                    const res = await fetch('/api/admin/seed', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ game_id: currentGame.id }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) setMsg(`Error: ${data.error}`)
+                    else { setMsg(`Seeded ${data.seeded.length} teams.`); fetchTeams(currentGame.id) }
+                    setLoading(false)
+                  }}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg bg-zinc-700 text-white text-sm font-medium hover:bg-zinc-600 disabled:opacity-50"
+                >
+                  Seed Test Data
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Delete all seed players and their teams?')) return
+                    setLoading(true)
+                    setMsg('')
+                    const res = await fetch('/api/admin/seed', {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ game_id: currentGame.id }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) setMsg(`Error: ${data.error}`)
+                    else { setMsg(`Deleted ${data.deleted} seed players.`); fetchTeams(currentGame.id) }
+                    setLoading(false)
+                  }}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg bg-red-900 text-red-300 text-sm font-medium hover:bg-red-800 disabled:opacity-50"
+                >
+                  Clear Seed Data
+                </button>
+              </div>
+            </section>
+          )}
+
           {/* Golden Gun */}
           {currentGame.status === 'active' && (
             <section className="rounded-xl border border-yellow-800 bg-zinc-950 p-6 space-y-4">

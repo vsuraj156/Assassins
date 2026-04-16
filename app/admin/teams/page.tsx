@@ -16,7 +16,7 @@ interface Team {
   points: number
   invite_code: string
   name_status: string
-  target_team?: { id: string; name: string } | null
+  target_team_id: string | null
   players?: Player[]
 }
 
@@ -104,7 +104,7 @@ export default function AdminTeamsPage() {
               <label className="text-xs text-zinc-400">Target team:</label>
               <select
                 className="rounded bg-zinc-900 border border-zinc-700 px-2 py-1 text-xs text-white"
-                value={team.target_team?.id ?? ''}
+                value={team.target_team_id ?? ''}
                 onChange={(e) => updateTarget(team.id, e.target.value)}
                 disabled={loading}
               >
@@ -113,8 +113,8 @@ export default function AdminTeamsPage() {
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
-              {team.target_team && (
-                <span className="text-xs text-zinc-400">→ <span className="text-white">{team.target_team.name}</span></span>
+              {team.target_team_id && (
+                <span className="text-xs text-zinc-400">→ <span className="text-white">{allTeams.find((t) => t.id === team.target_team_id)?.name ?? '—'}</span></span>
               )}
             </div>
           </div>
