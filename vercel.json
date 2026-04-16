@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/daily-checkin",
-      "schedule": "59 23 * * *"
+      "schedule": "59 3 * * *"
     },
     {
       "path": "/api/cron/team-kills",

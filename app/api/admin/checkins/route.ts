@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
+import { sendStatusChangeEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await auth()
@@ -35,6 +36,15 @@ export async function POST(req: NextRequest) {
   const { checkin_id, action } = body
   const db = createServerClient()
 
+  // Fetch checkin first so we have player_id and meal_date for recovery logic
+  const { data: checkin } = await db
+    .from('checkins')
+    .select('player_id, meal_date')
+    .eq('id', checkin_id)
+    .single()
+
+  if (!checkin) return NextResponse.json({ error: 'Check-in not found' }, { status: 404 })
+
   const now = new Date().toISOString()
   const newStatus = action === 'approve' ? 'approved' : 'rejected'
 
@@ -44,5 +54,53 @@ export async function POST(req: NextRequest) {
     .eq('id', checkin_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // On approval: check if player now has 3 approved check-ins on this meal_date
+  if (action === 'approve') {
+    const { count } = await db
+      .from('checkins')
+      .select('*', { count: 'exact', head: true })
+      .eq('player_id', checkin.player_id)
+      .eq('meal_date', checkin.meal_date)
+      .eq('status', 'approved')
+
+    if ((count ?? 0) >= 3) {
+      const { data: player } = await db
+        .from('players')
+        .select('id, status, name, user_email')
+        .eq('id', checkin.player_id)
+        .single()
+
+      if (player?.status === 'exposed') {
+        const { data: lastExposure } = await db
+          .from('status_history')
+          .select('reason')
+          .eq('entity_id', checkin.player_id)
+          .eq('entity_type', 'player')
+          .eq('new_status', 'exposed')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (!lastExposure?.reason?.toLowerCase().includes('kill')) {
+          await db.from('players').update({ status: 'active' }).eq('id', checkin.player_id)
+          await db.from('status_history').insert({
+            entity_type: 'player',
+            entity_id: checkin.player_id,
+            old_status: 'exposed',
+            new_status: 'active',
+            reason: '3 meal check-ins completed in a single day',
+            changed_by: session.user.playerId,
+          })
+          await sendStatusChangeEmail(
+            player.user_email, player.name,
+            'exposed', 'active',
+            '3 meal check-ins completed — you\'re back to active'
+          )
+        }
+      }
+    }
+  }
+
   return NextResponse.json({ success: true })
 }

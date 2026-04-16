@@ -116,6 +116,38 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Recover exposed-due-kill-timer players on the killer's team
+    const { data: exposedTeammates } = await db
+      .from('players')
+      .select('id, name, user_email')
+      .eq('team_id', elim.killer_team_id)
+      .eq('status', 'exposed')
+
+    for (const teammate of exposedTeammates ?? []) {
+      const { data: lastExposure } = await db
+        .from('status_history')
+        .select('reason')
+        .eq('entity_id', teammate.id)
+        .eq('entity_type', 'player')
+        .eq('new_status', 'exposed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (lastExposure?.reason?.toLowerCase().includes('kill')) {
+        await db.from('players').update({ status: 'active' }).eq('id', teammate.id)
+        await db.from('status_history').insert({
+          entity_type: 'player',
+          entity_id: teammate.id,
+          old_status: 'exposed',
+          new_status: 'active',
+          reason: 'Team made a kill — kill timer reset',
+          changed_by: session.user.playerId,
+        })
+        await sendStatusChangeEmail(teammate.user_email, teammate.name, 'exposed', 'active', 'Your team made a kill — you\'re back in action')
+      }
+    }
+
     // Send email to killer
     if (elim.killer?.user_email) {
       await sendKillApprovedEmail(elim.killer.user_email, elim.killer.name, elim.target?.name ?? 'target', elim.points)
