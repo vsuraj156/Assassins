@@ -12,21 +12,29 @@ export async function GET(req: NextRequest) {
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
 
   // Get all active games
-  const { data: games } = await db.from('games').select('id, kill_blackout_hours').eq('status', 'active')
+  const { data: games } = await db.from('games').select('id, kill_blackout_hours, start_time').eq('status', 'active')
   if (!games?.length) return NextResponse.json({ exposed: 0 })
 
   let exposed = 0
 
   for (const game of games) {
-    const gameCutoff = new Date(Date.now() - game.kill_blackout_hours * 60 * 60 * 1000).toISOString()
+    const windowMs = game.kill_blackout_hours * 60 * 60 * 1000
+    const gameCutoff = new Date(Date.now() - windowMs).toISOString()
+    // For teams with no kills, the clock starts from game start_time, not the epoch.
+    // Only treat null last_elimination_at as stalled if the game itself started >window ago.
+    const gameStartedBeforeCutoff = game.start_time && new Date(game.start_time) < new Date(gameCutoff)
 
-    // Teams that haven't killed in the required window (or never killed)
+    // Teams that haven't killed in the required window (or never killed if game is old enough)
+    const filterExpr = gameStartedBeforeCutoff
+      ? `last_elimination_at.is.null,last_elimination_at.lt.${gameCutoff}`
+      : `last_elimination_at.lt.${gameCutoff}`
+
     const { data: stalledTeams } = await db
       .from('teams')
       .select('id')
       .eq('game_id', game.id)
       .eq('status', 'active')
-      .or(`last_elimination_at.is.null,last_elimination_at.lt.${gameCutoff}`)
+      .or(filterExpr)
 
     if (!stalledTeams) continue
 
