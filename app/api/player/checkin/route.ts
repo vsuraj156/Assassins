@@ -34,6 +34,10 @@ export async function POST(req: NextRequest) {
   const now = new Date()
   const mealWindow = getMealWindow(now)
 
+  const { data: player } = await db.from('players').select('game_id, status').eq('id', session.user.playerId).single()
+  if (!player) return NextResponse.json({ error: 'Player not found' }, { status: 404 })
+  if (player.status === 'terminated') return NextResponse.json({ error: 'Terminated players cannot submit check-ins' }, { status: 403 })
+
   if (!mealWindow) {
     return NextResponse.json({ error: 'Check-ins are only accepted during meal times (Breakfast 7:30–11am, Lunch 11:30am–2:30pm, Dinner 5–8pm EDT)' }, { status: 400 })
   }
@@ -60,9 +64,6 @@ export async function POST(req: NextRequest) {
   if (body.action === 'submit') {
     const { photo_url } = body
     if (!photo_url) return NextResponse.json({ error: 'photo_url required' }, { status: 400 })
-
-    const { data: player } = await db.from('players').select('game_id').eq('id', session.user.playerId).single()
-    if (!player) return NextResponse.json({ error: 'Player not found' }, { status: 404 })
 
     const { data, error } = await db
       .from('checkins')
