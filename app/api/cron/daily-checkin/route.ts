@@ -15,12 +15,17 @@ export async function GET(req: NextRequest) {
   const today = new Date().toISOString().slice(0, 10)
 
   // Get all active games
-  const { data: games } = await db.from('games').select('id').eq('status', 'active')
+  const { data: games } = await db
+    .from('games')
+    .select('id, general_amnesty_active')
+    .eq('status', 'active')
   if (!games?.length) return NextResponse.json({ processed: 0 })
 
   let processed = 0
 
   for (const game of games) {
+    if (game.general_amnesty_active) continue
+
     // Auto-approve still-pending check-ins so a slow admin review doesn't penalize a player.
     const { data: pending } = await db
       .from('checkins')

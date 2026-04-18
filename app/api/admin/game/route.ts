@@ -171,6 +171,62 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
+  // action: toggle_amnesty — start or end general amnesty, shifting kill timers on end
+  if (body.action === 'toggle_amnesty') {
+    const { game_id } = body
+    const { data: game } = await db
+      .from('games')
+      .select('general_amnesty_active, amnesty_started_at, start_time')
+      .eq('id', game_id)
+      .single()
+    if (!game) return NextResponse.json({ error: 'Game not found' }, { status: 404 })
+
+    if (!game.general_amnesty_active) {
+      await db
+        .from('games')
+        .update({ general_amnesty_active: true, amnesty_started_at: new Date().toISOString() })
+        .eq('id', game_id)
+      return NextResponse.json({ success: true, amnesty: true })
+    }
+
+    // Ending amnesty: shift all team kill timers forward by the amnesty duration
+    const now = new Date()
+    const durationMs = game.amnesty_started_at
+      ? now.getTime() - new Date(game.amnesty_started_at).getTime()
+      : 0
+
+    if (durationMs > 0) {
+      const { data: teams } = await db
+        .from('teams')
+        .select('id, last_elimination_at, last_kill_penalty_at')
+        .eq('game_id', game_id)
+        .eq('status', 'active')
+
+      for (const team of teams ?? []) {
+        const updates: Record<string, string> = {}
+        if (team.last_elimination_at) {
+          updates.last_elimination_at = new Date(new Date(team.last_elimination_at).getTime() + durationMs).toISOString()
+        }
+        if (team.last_kill_penalty_at) {
+          updates.last_kill_penalty_at = new Date(new Date(team.last_kill_penalty_at).getTime() + durationMs).toISOString()
+        }
+        if (Object.keys(updates).length > 0) {
+          await db.from('teams').update(updates).eq('id', team.id)
+        }
+      }
+    }
+
+    const gameUpdates: Record<string, string | null | boolean> = {
+      general_amnesty_active: false,
+      amnesty_started_at: null,
+    }
+    if (game.start_time && durationMs > 0) {
+      gameUpdates.start_time = new Date(new Date(game.start_time).getTime() + durationMs).toISOString()
+    }
+    await db.from('games').update(gameUpdates).eq('id', game_id)
+    return NextResponse.json({ success: true, amnesty: false })
+  }
+
   // action: assign_targets (manual override)
   if (body.action === 'assign_targets') {
     // body.assignments: { [teamId]: targetTeamId }

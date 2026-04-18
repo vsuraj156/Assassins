@@ -49,7 +49,7 @@ export default async function PlayerDashboard() {
       ? db.from('teams').select('*, captain_player_id, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single()
       : Promise.resolve({ data: null, error: null }),
     session.user.gameId
-      ? db.from('games').select('name, status, totem_description, kill_blackout_hours').eq('id', session.user.gameId).single()
+      ? db.from('games').select('name, status, totem_description, kill_blackout_hours, general_amnesty_active').eq('id', session.user.gameId).single()
       : Promise.resolve({ data: null, error: null }),
     db.from('golden_gun_events')
       .select('holder_player_id, expires_at')
@@ -93,6 +93,7 @@ export default async function PlayerDashboard() {
   const teamIsActive = teamData?.status === 'active'
   const playerAlive = player?.status !== 'terminated'
   const killBlackoutHours: number = (game?.data as { kill_blackout_hours?: number } | null)?.kill_blackout_hours ?? 48
+  const generalAmnestyActive: boolean = (game?.data as { general_amnesty_active?: boolean } | null)?.general_amnesty_active ?? false
 
   let killHoursLeft: number | null = null // null = no kills yet (already at risk)
   if (gameIsActive && teamIsActive && playerAlive && teamData?.last_elimination_at) {
@@ -134,6 +135,16 @@ export default async function PlayerDashboard() {
                 Return to MI6 before expiry or your kills will be voided and your team exposed.
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* General amnesty banner */}
+      {generalAmnestyActive && (
+        <div className="rounded-xl border border-blue-700 bg-blue-950/30 p-4">
+          <div className="text-blue-300 font-semibold text-sm">General Amnesty in Effect</div>
+          <div className="text-blue-500 text-xs mt-0.5">
+            No kills are permitted until MI6 lifts the amnesty. Check-in penalties are also paused.
           </div>
         </div>
       )}
