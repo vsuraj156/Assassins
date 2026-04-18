@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/db'
 import { sendStatusChangeEmail } from '@/lib/email'
 import { killTimerResetTime } from '@/lib/game-engine'
+import { repairTargetChainIfTeamEliminated } from '@/lib/target-chain'
 
 // Runs every hour via external scheduler
 export async function GET(req: NextRequest) {
@@ -82,6 +83,7 @@ export async function GET(req: NextRequest) {
         old_status: oldStatus,
         new_status: newStatus,
         reason: `Team failed to make a kill within ${game.kill_blackout_hours} hours`,
+        reason_code: 'kill_timer_penalty',
         changed_by: null,
       })
       await db
@@ -95,6 +97,10 @@ export async function GET(req: NextRequest) {
         newStatus,
         `Your team hasn't made a kill in ${game.kill_blackout_hours} hours`
       )
+
+      if (newStatus === 'terminated') {
+        await repairTargetChainIfTeamEliminated(db, team.id)
+      }
 
       penalized++
     }

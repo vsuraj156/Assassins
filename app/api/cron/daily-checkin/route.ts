@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/db'
 import { nextStatusAfterMissedCheckin } from '@/lib/game-engine'
 import { sendStatusChangeEmail } from '@/lib/email'
+import { repairTargetChainIfTeamEliminated } from '@/lib/target-chain'
 import { PlayerStatus } from '@/types/game'
 
 // Runs at 11:59 PM daily via Vercel Cron
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
     // Get all eligible players (active, exposed, wanted)
     const { data: players } = await db
       .from('players')
-      .select('id, status, name, user_email')
+      .select('id, status, name, user_email, team_id')
       .eq('game_id', game.id)
       .in('status', ['active', 'exposed', 'wanted'])
 
@@ -80,6 +81,10 @@ export async function GET(req: NextRequest) {
 
       // Email notification
       await sendStatusChangeEmail(player.user_email, player.name, player.status, nextStatus, 'Missed daily meal check-in')
+
+      if (nextStatus === 'terminated' && player.team_id) {
+        await repairTargetChainIfTeamEliminated(db, player.team_id)
+      }
 
       processed++
     }

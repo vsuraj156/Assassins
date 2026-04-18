@@ -20,6 +20,7 @@ interface PendingCascade {
   eliminatedTeamName: string
   newTargetTeamId: string
   newTargetTeamName: string
+  hunterTeamId: string
   killerTeamId: string
 }
 
@@ -54,6 +55,7 @@ export default function AdminEliminationsPage() {
         eliminatedTeamName: data.eliminatedTeamName,
         newTargetTeamId: data.newTargetTeamId,
         newTargetTeamName: data.newTargetTeamName,
+        hunterTeamId: data.hunterTeamId,
         killerTeamId: data.killerTeamId,
       })
     }
@@ -70,6 +72,7 @@ export default function AdminEliminationsPage() {
       body: JSON.stringify({
         action: 'advance_target_chain',
         eliminated_team_id: pendingCascade.eliminatedTeamId,
+        hunter_team_id: pendingCascade.hunterTeamId,
         killer_team_id: pendingCascade.killerTeamId,
         dry_run: dryRun,
       }),
@@ -105,7 +108,7 @@ export default function AdminEliminationsPage() {
           <p className="text-yellow-300 font-semibold">Team eliminated — target chain needs advancing</p>
           <p className="text-sm text-yellow-200">
             <strong>{pendingCascade.eliminatedTeamName}</strong> is fully eliminated.
-            The killer's team will inherit their target: <strong>{pendingCascade.newTargetTeamName}</strong>.
+            Their assigned hunter will inherit their target: <strong>{pendingCascade.newTargetTeamName}</strong>.
           </p>
           <div className="flex gap-2">
             <button

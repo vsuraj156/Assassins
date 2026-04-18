@@ -77,6 +77,13 @@ export async function POST(req: NextRequest) {
       changed_by: session.user.playerId,
     })
 
+    // If the target held the golden gun, retire it — the gun is non-transferable
+    await db
+      .from('golden_gun_events')
+      .update({ status: 'returned', returned_at: now })
+      .eq('holder_player_id', elim.target_id)
+      .eq('status', 'active')
+
     // Award points to killer team
     const newPoints = (elim.killer_team?.points ?? 0) + elim.points
     await db.from('teams').update({ points: newPoints, last_elimination_at: now }).eq('id', elim.killer_team_id)
@@ -88,11 +95,13 @@ export async function POST(req: NextRequest) {
       .eq('team_id', elim.target_team_id)
       .not('status', 'eq', 'terminated')
 
-    let teamEliminatedPayload: { teamEliminated: true; eliminatedTeamId: string; eliminatedTeamName: string; newTargetTeamId: string; newTargetTeamName: string; killerTeamId: string } | null = null
+    let teamEliminatedPayload: { teamEliminated: true; eliminatedTeamId: string; eliminatedTeamName: string; newTargetTeamId: string; newTargetTeamName: string; hunterTeamId: string; killerTeamId: string } | null = null
 
     if (!survivors || survivors.length === 0) {
       const { data: targetTeam } = await db.from('teams').select('status, name, target_team_id').eq('id', elim.target_team_id).single()
-      if (targetTeam?.status === 'active' && targetTeam.target_team_id && targetTeam.target_team_id !== elim.killer_team_id) {
+      // The hunter is the team whose assigned target was just eliminated — they inherit the chain, not necessarily the killer.
+      const { data: hunterTeam } = await db.from('teams').select('id').eq('target_team_id', elim.target_team_id).eq('status', 'active').single()
+      if (targetTeam?.status === 'active' && targetTeam.target_team_id && hunterTeam && targetTeam.target_team_id !== hunterTeam.id) {
         const { data: newTargetTeam } = await db.from('teams').select('name').eq('id', targetTeam.target_team_id).single()
         if (newTargetTeam) {
           teamEliminatedPayload = {
@@ -101,6 +110,7 @@ export async function POST(req: NextRequest) {
             eliminatedTeamName: targetTeam.name,
             newTargetTeamId: targetTeam.target_team_id,
             newTargetTeamName: newTargetTeam.name,
+            hunterTeamId: hunterTeam.id,
             killerTeamId: elim.killer_team_id,
           }
         }
@@ -121,7 +131,7 @@ export async function POST(req: NextRequest) {
     for (const teammate of penalizedTeammates ?? []) {
       const { data: lastExposure } = await db
         .from('status_history')
-        .select('reason')
+        .select('reason_code')
         .eq('entity_id', teammate.id)
         .eq('entity_type', 'player')
         .eq('new_status', 'exposed')
@@ -129,7 +139,7 @@ export async function POST(req: NextRequest) {
         .limit(1)
         .single()
 
-      if (!lastExposure?.reason?.toLowerCase().includes('kill')) continue
+      if (lastExposure?.reason_code !== 'kill_timer_penalty') continue
 
       const oldStatus = teammate.status as 'exposed' | 'wanted'
       const newStatus = oldStatus === 'wanted' ? 'exposed' : 'active'
@@ -166,7 +176,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'advance_target_chain') {
-    const { eliminated_team_id, killer_team_id, dry_run } = body
+    const { eliminated_team_id, hunter_team_id, killer_team_id, dry_run } = body
 
     const { data: eliminatedTeam } = await db
       .from('teams')
@@ -177,15 +187,15 @@ export async function POST(req: NextRequest) {
     if (!eliminatedTeam) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
 
     const newTargetId = eliminatedTeam.target_team_id
-    if (!newTargetId || newTargetId === killer_team_id) {
+    if (!newTargetId || newTargetId === hunter_team_id) {
       return NextResponse.json({ error: 'No valid target to advance to' }, { status: 400 })
     }
 
     const { data: newTargetTeam } = await db.from('teams').select('name').eq('id', newTargetId).single()
-    const { data: killerTeamPlayers } = await db
+    const { data: hunterTeamPlayers } = await db
       .from('players')
       .select('name, user_email')
-      .eq('team_id', killer_team_id)
+      .eq('team_id', hunter_team_id)
       .neq('status', 'terminated')
 
     if (dry_run) {
@@ -193,7 +203,7 @@ export async function POST(req: NextRequest) {
         dry_run: true,
         eliminatedTeamName: eliminatedTeam.name,
         newTargetTeamName: newTargetTeam?.name,
-        playersToNotify: (killerTeamPlayers ?? []).map((p) => ({ name: p.name, email: p.user_email })),
+        playersToNotify: (hunterTeamPlayers ?? []).map((p) => ({ name: p.name, email: p.user_email })),
       })
     }
 
@@ -209,10 +219,11 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    await db.from('teams').update({ target_team_id: newTargetId }).eq('id', killer_team_id)
+    // Update the hunter's target pointer, not the killer's — the hunter inherits the chain.
+    await db.from('teams').update({ target_team_id: newTargetId }).eq('id', hunter_team_id)
 
     if (newTargetTeam) {
-      for (const player of killerTeamPlayers ?? []) {
+      for (const player of hunterTeamPlayers ?? []) {
         if (player.user_email) {
           await sendTargetUpdateEmail(player.user_email, player.name, newTargetTeam.name)
         }
