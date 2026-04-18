@@ -105,7 +105,13 @@ export function isKillValid(ctx: KillValidationContext): { valid: boolean; reaso
 
 // Build a circular target chain from a list of team IDs (random order)
 export function buildTargetChain(teamIds: string[]): Map<string, string> {
-  const shuffled = [...teamIds].sort(() => Math.random() - 0.5)
+  const shuffled = [...teamIds]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(
+      (crypto.getRandomValues(new Uint32Array(1))[0] / 0x1_0000_0000) * (i + 1)
+    )
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
   const chain = new Map<string, string>()
   for (let i = 0; i < shuffled.length; i++) {
     chain.set(shuffled[i], shuffled[(i + 1) % shuffled.length])
