@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
   const validationResult = isKillValid({
     killerTeamId: killer.team_id!,
     targetTeamId: target.team_id!,
+    targetStatus: target.status as import('@/types/game').PlayerStatus,
     assignedTargetTeamId: killerTeam?.target_team_id ?? null,
     activeWars: activeWars ?? [],
     killerIsDouble0: killer.is_double_0,

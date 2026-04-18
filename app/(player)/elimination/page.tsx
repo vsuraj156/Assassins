@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react'
 interface Player {
   id: string
   name: string
-  user_email: string
+  photo_url?: string | null
+  status?: string
 }
 
 interface Elimination {
@@ -20,6 +21,10 @@ export default function EliminationPage() {
   const [targetPlayers, setTargetPlayers] = useState<Player[]>([])
   const [warTargets, setWarTargets] = useState<{ teamName: string; players: Player[] }[]>([])
   const [double0Targets, setDouble0Targets] = useState<Player[]>([])
+  const [rogueTargets, setRogueTargets] = useState<Player[]>([])
+  const [openTargets, setOpenTargets] = useState<Player[]>([])
+  const [holdsGoldenGun, setHoldsGoldenGun] = useState(false)
+  const [goldenGunTargets, setGoldenGunTargets] = useState<Player[]>([])
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,6 +43,10 @@ export default function EliminationPage() {
     setTargetPlayers(data.target?.players ?? [])
     setWarTargets(data.warTargets ?? [])
     setDouble0Targets(data.double0Targets ?? [])
+    setRogueTargets(data.rogueTargets ?? [])
+    setOpenTargets(data.openTargets ?? [])
+    setHoldsGoldenGun(data.holdsGoldenGun ?? false)
+    setGoldenGunTargets(data.goldenGunTargets ?? [])
   }
 
   async function fetchMyElims() {
@@ -86,8 +95,9 @@ export default function EliminationPage() {
         <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-6 space-y-5">
           <div>
             <label className="block text-sm text-zinc-300 mb-2">Target player</label>
-            {targetPlayers.length === 0 && warTargets.length === 0 && double0Targets.length === 0 ? (
-              <p className="text-zinc-500 text-sm">No target team assigned, or target is fully eliminated.</p>
+            {targetPlayers.length === 0 && warTargets.length === 0 && double0Targets.length === 0 &&
+             rogueTargets.length === 0 && openTargets.length === 0 && goldenGunTargets.length === 0 ? (
+              <p className="text-zinc-500 text-sm">No eligible targets right now.</p>
             ) : (
               <select
                 className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500"
@@ -113,6 +123,27 @@ export default function EliminationPage() {
                   <optgroup label="Double-0 Agents">
                     {double0Targets.map((p) => (
                       <option key={p.id} value={p.id}>{p.name} (00)</option>
+                    ))}
+                  </optgroup>
+                )}
+                {rogueTargets.length > 0 && (
+                  <optgroup label="Rogue Agents">
+                    {rogueTargets.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} (Rogue)</option>
+                    ))}
+                  </optgroup>
+                )}
+                {openTargets.length > 0 && (
+                  <optgroup label="Open Targets (Exposed / Wanted)">
+                    {openTargets.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.status})</option>
+                    ))}
+                  </optgroup>
+                )}
+                {holdsGoldenGun && goldenGunTargets.length > 0 && (
+                  <optgroup label="Golden Gun — All Players">
+                    {goldenGunTargets.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </optgroup>
                 )}

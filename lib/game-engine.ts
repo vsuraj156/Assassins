@@ -41,6 +41,7 @@ export function eliminationPoints(isDouble0Target: boolean): number {
 export interface KillValidationContext {
   killerTeamId: string
   targetTeamId: string
+  targetStatus: PlayerStatus
   assignedTargetTeamId: string | null
   activeWars: { team1_id: string; team2_id: string; status: WarStatus }[]
   killerIsDouble0: boolean
@@ -52,12 +53,12 @@ export interface KillValidationContext {
 }
 
 export function isKillValid(ctx: KillValidationContext): { valid: boolean; reason?: string } {
-  // Can't kill own teammate
-  if (ctx.killerTeamId === ctx.targetTeamId && !ctx.killerIsRogue) {
+  // Teammate restriction overrides everything except rogue status
+  if (ctx.killerTeamId === ctx.targetTeamId && !ctx.killerIsRogue && !ctx.targetIsRogue) {
     return { valid: false, reason: 'Cannot eliminate a teammate' }
   }
 
-  // Rogue agents can kill/be killed by anyone
+  // Rogue agents can kill/be killed by anyone (including former teammates)
   if (ctx.killerIsRogue || ctx.targetIsRogue) {
     return { valid: true }
   }
@@ -69,6 +70,11 @@ export function isKillValid(ctx: KillValidationContext): { valid: boolean; reaso
 
   // Golden gun holder can kill anyone
   if (ctx.goldenGunActive && ctx.goldenGunHolderTeamId === ctx.killerTeamId) {
+    return { valid: true }
+  }
+
+  // Exposed or wanted players are open targets for everyone
+  if (ctx.targetStatus === 'exposed' || ctx.targetStatus === 'wanted') {
     return { valid: true }
   }
 
