@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
 import { buildTargetChain, goldenGunExpiresAt } from '@/lib/game-engine'
-import { sendGoldenGunEmail } from '@/lib/email'
+import { sendGoldenGunEmail, sendTargetUpdateEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await auth()
@@ -84,9 +84,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Need at least 2 active teams to start' }, { status: 400 })
     }
 
-    const chain = buildTargetChain(teams.map((t) => t.id))
+    const { data: teamsWithDetails } = await db
+      .from('teams')
+      .select('id, name, players(name, user_email)')
+      .eq('game_id', game_id)
+      .eq('status', 'active')
+
+    const chain = buildTargetChain((teamsWithDetails ?? []).map((t) => t.id))
+    const teamById = new Map((teamsWithDetails ?? []).map((t) => [t.id, t]))
+
     for (const [teamId, targetId] of chain) {
       await db.from('teams').update({ target_team_id: targetId }).eq('id', teamId)
+    }
+
+    for (const [teamId, targetId] of chain) {
+      const team = teamById.get(teamId)
+      const targetTeam = teamById.get(targetId)
+      if (!team || !targetTeam) continue
+      for (const player of (team.players ?? []) as { name: string; user_email: string | null }[]) {
+        if (player.user_email) {
+          await sendTargetUpdateEmail(player.user_email, player.name, targetTeam.name)
+        }
+      }
     }
 
     const { error } = await db

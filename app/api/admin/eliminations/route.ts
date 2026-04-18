@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
-import { sendKillApprovedEmail, sendStatusChangeEmail } from '@/lib/email'
+import { sendKillApprovedEmail, sendStatusChangeEmail, sendTargetUpdateEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await auth()
@@ -108,10 +108,21 @@ export async function POST(req: NextRequest) {
           .eq('id', elim.target_team_id)
           .single()
         if (eliminatedTeam?.target_team_id && eliminatedTeam.target_team_id !== elim.killer_team_id) {
-          await db
-            .from('teams')
-            .update({ target_team_id: eliminatedTeam.target_team_id })
-            .eq('id', elim.killer_team_id)
+          const newTargetId = eliminatedTeam.target_team_id
+          await db.from('teams').update({ target_team_id: newTargetId }).eq('id', elim.killer_team_id)
+
+          const [{ data: newTargetTeam }, { data: killerTeamPlayers }] = await Promise.all([
+            db.from('teams').select('name').eq('id', newTargetId).single(),
+            db.from('players').select('name, user_email').eq('team_id', elim.killer_team_id).neq('status', 'terminated'),
+          ])
+
+          if (newTargetTeam) {
+            for (const player of killerTeamPlayers ?? []) {
+              if (player.user_email) {
+                await sendTargetUpdateEmail(player.user_email, player.name, newTargetTeam.name)
+              }
+            }
+          }
         }
       }
     }

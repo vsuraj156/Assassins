@@ -50,14 +50,16 @@ export async function sendStatusChangeEmail(
   })
 }
 
-export async function sendTargetUpdateEmail(to: string, playerName: string) {
+export async function sendTargetUpdateEmail(to: string, playerName: string, targetTeamName: string) {
+  const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://quincyassassins.vercel.app'
   await send({
     to,
     subject: '[Quincy Assassins] Your target has changed',
     html: `
       <h2>New Target Assigned</h2>
       <p>Hi ${playerName},</p>
-      <p>Your team has a new target. Log in to see who you're hunting.</p>
+      <p>Your team's new target is <strong>${targetTeamName}</strong>.</p>
+      <p><a href="${siteUrl}/target">Log in to view your target details</a></p>
     `,
   })
 }
