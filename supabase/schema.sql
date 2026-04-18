@@ -110,6 +110,7 @@ CREATE TABLE wars (
 CREATE TABLE golden_gun_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  holder_player_id UUID NOT NULL REFERENCES players(id),
   holder_team_id UUID NOT NULL REFERENCES teams(id),
   released_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL,

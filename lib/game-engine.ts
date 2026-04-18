@@ -39,6 +39,7 @@ export function eliminationPoints(isDouble0Target: boolean): number {
 
 // Check if a kill is valid given the current game state
 export interface KillValidationContext {
+  killerPlayerId: string
   killerTeamId: string
   targetTeamId: string
   targetStatus: PlayerStatus
@@ -49,7 +50,7 @@ export interface KillValidationContext {
   killerIsRogue: boolean
   targetIsRogue: boolean
   goldenGunActive: boolean
-  goldenGunHolderTeamId?: string | null
+  goldenGunHolderPlayerId?: string | null
 }
 
 export function isKillValid(ctx: KillValidationContext): { valid: boolean; reason?: string } {
@@ -68,8 +69,8 @@ export function isKillValid(ctx: KillValidationContext): { valid: boolean; reaso
     return { valid: true }
   }
 
-  // Golden gun holder can kill anyone
-  if (ctx.goldenGunActive && ctx.goldenGunHolderTeamId === ctx.killerTeamId) {
+  // Golden gun holder (the specific individual) can kill anyone
+  if (ctx.goldenGunActive && ctx.goldenGunHolderPlayerId === ctx.killerPlayerId) {
     return { valid: true }
   }
 
@@ -107,12 +108,15 @@ export function buildTargetChain(teamIds: string[]): Map<string, string> {
   return chain
 }
 
-// Golden gun expires at 9:59 PM on the day it was released
+// Golden gun expires at 9:59 PM EDT on the day it was released.
+// EDT = UTC-4, so 9:59 PM EDT = 01:59 UTC next day.
 export function goldenGunExpiresAt(releasedAt: Date): Date {
-  const expires = new Date(releasedAt)
-  expires.setHours(21, 59, 0, 0)
-  // If released after 9:59 PM, it expires same-day at 9:59 (edge case: treat as expired immediately)
-  return expires
+  const EDT_OFFSET_MS = 4 * 60 * 60 * 1000
+  // Shift releasedAt into EDT "wall clock" as if it were UTC
+  const edtDate = new Date(releasedAt.getTime() - EDT_OFFSET_MS)
+  edtDate.setUTCHours(21, 59, 0, 0)
+  // Shift back to real UTC
+  return new Date(edtDate.getTime() + EDT_OFFSET_MS)
 }
 
 // Stun expires at midnight of the day it was applied

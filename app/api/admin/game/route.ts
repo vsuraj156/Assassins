@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
 import { buildTargetChain, goldenGunExpiresAt } from '@/lib/game-engine'
+import { sendGoldenGunEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await auth()
@@ -11,12 +12,28 @@ async function requireAdmin() {
   return session
 }
 
-// GET /api/admin/game — list all games
-export async function GET() {
+// GET /api/admin/game — list all games; ?game_id=xxx also returns current golden gun
+export async function GET(req: NextRequest) {
   const session = await requireAdmin()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const db = createServerClient()
+  const gameId = req.nextUrl.searchParams.get('game_id')
+
+  if (gameId) {
+    const now = new Date().toISOString()
+    const [{ data: game }, { data: goldenGun }] = await Promise.all([
+      db.from('games').select('*').eq('id', gameId).single(),
+      db.from('golden_gun_events')
+        .select('id, holder_player_id, holder_team_id, released_at, expires_at, returned_at, status, holder:players!holder_player_id(id, name, team_id, teams!team_id(name))')
+        .eq('game_id', gameId)
+        .eq('status', 'active')
+        .gt('expires_at', now)
+        .maybeSingle(),
+    ])
+    return NextResponse.json({ game, currentGun: goldenGun ?? null })
+  }
+
   const { data, error } = await db.from('games').select('*').order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
@@ -90,19 +107,58 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
-  // action: golden_gun — release to a team
+  // action: golden_gun — register that a player picked up the gun
   if (body.action === 'golden_gun') {
+    const { game_id, player_id } = body
+
+    // Block if a gun is already active
+    const nowIso = new Date().toISOString()
+    const { data: existing } = await db
+      .from('golden_gun_events')
+      .select('id')
+      .eq('game_id', game_id)
+      .eq('status', 'active')
+      .gt('expires_at', nowIso)
+      .maybeSingle()
+    if (existing) {
+      return NextResponse.json({ error: 'A golden gun is already active. Mark it returned first.' }, { status: 400 })
+    }
+
+    const { data: holder } = await db
+      .from('players')
+      .select('id, name, team_id, user_email')
+      .eq('id', player_id)
+      .single()
+    if (!holder?.team_id) return NextResponse.json({ error: 'Player not found or has no team' }, { status: 400 })
+
     const now = new Date()
     const expires = goldenGunExpiresAt(now)
     const { error } = await db.from('golden_gun_events').insert({
-      game_id: body.game_id,
-      holder_team_id: body.team_id,
+      game_id,
+      holder_player_id: holder.id,
+      holder_team_id: holder.team_id,
       released_at: now.toISOString(),
       expires_at: expires.toISOString(),
       status: 'active',
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    if (holder.user_email) {
+      await sendGoldenGunEmail(holder.user_email, holder.name, expires)
+    }
+
     return NextResponse.json({ success: true, expires_at: expires.toISOString() })
+  }
+
+  // action: return_golden_gun — mark gun returned
+  if (body.action === 'return_golden_gun') {
+    const { event_id } = body
+    const { error } = await db
+      .from('golden_gun_events')
+      .update({ status: 'returned', returned_at: new Date().toISOString() })
+      .eq('id', event_id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
   }
 
   // action: update_totem

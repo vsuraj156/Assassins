@@ -26,7 +26,7 @@ export async function GET() {
     db.from('players').select('is_double_0').eq('id', myPlayerId).single(),
     db.from('wars').select('team1_id, team2_id').eq('game_id', myGameId).eq('status', 'active'),
     db.from('golden_gun_events')
-      .select('holder_team_id')
+      .select('holder_player_id')
       .eq('game_id', myGameId)
       .eq('status', 'active')
       .gt('expires_at', now)
@@ -106,7 +106,7 @@ export async function GET() {
   openTargets.forEach((p) => alreadyListed.add(p.id))
 
   // 6. Golden gun — all remaining players (if my team holds it)
-  const holdsGoldenGun = !!goldenGun && goldenGun.holder_team_id === myTeamId
+  const holdsGoldenGun = !!goldenGun && goldenGun.holder_player_id === myPlayerId
   let goldenGunTargets: { id: string; name: string; photo_url: string | null }[] = []
   if (holdsGoldenGun) {
     const { data } = await db

@@ -17,19 +17,44 @@ interface Team {
   status: string
 }
 
+interface GoldenGunEvent {
+  id: string
+  holder_player_id: string
+  holder_team_id: string
+  expires_at: string
+  returned_at: string | null
+  status: string
+  holder: {
+    id: string
+    name: string
+    teams: { name: string } | null
+  } | null
+}
+
+interface PlayerOption {
+  id: string
+  name: string
+  team_id: string
+}
+
 export default function GameControlPage() {
   const [games, setGames] = useState<Game[]>([])
   const [teams, setTeams] = useState<Team[]>([])
+  const [players, setPlayers] = useState<PlayerOption[]>([])
   const [activeGameId, setActiveGameId] = useState<string>('')
   const [newGameName, setNewGameName] = useState('')
   const [totemDesc, setTotemDesc] = useState('')
-  const [goldenGunTeamId, setGoldenGunTeamId] = useState('')
+  const [goldenGunPlayerId, setGoldenGunPlayerId] = useState('')
+  const [currentGun, setCurrentGun] = useState<GoldenGunEvent | null>(null)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
 
   useEffect(() => { fetchGames() }, [])
   useEffect(() => {
-    if (activeGameId) fetchTeams(activeGameId)
+    if (activeGameId) {
+      fetchTeams(activeGameId)
+      fetchGoldenGun(activeGameId)
+    }
   }, [activeGameId])
 
   async function fetchGames() {
@@ -44,6 +69,16 @@ export default function GameControlPage() {
     const res = await fetch(`/api/admin/teams?game_id=${gameId}`)
     const data = await res.json()
     setTeams(data)
+    // Also load all active players for the golden gun picker
+    const pRes = await fetch(`/api/admin/players?game_id=${gameId}`)
+    const pData = await pRes.json()
+    setPlayers(Array.isArray(pData) ? pData : [])
+  }
+
+  async function fetchGoldenGun(gameId: string) {
+    const res = await fetch(`/api/admin/game?game_id=${gameId}`)
+    const data = await res.json()
+    setCurrentGun(data.currentGun ?? null)
   }
 
   async function action(payload: object) {
@@ -57,7 +92,11 @@ export default function GameControlPage() {
       })
       const data = await res.json()
       if (!res.ok) setMsg(`Error: ${data.error}`)
-      else { setMsg('Done!'); fetchGames() }
+      else {
+        setMsg('Done!')
+        fetchGames()
+        if (activeGameId) fetchGoldenGun(activeGameId)
+      }
     } finally {
       setLoading(false)
     }
@@ -208,26 +247,59 @@ export default function GameControlPage() {
           {currentGame.status === 'active' && (
             <section className="rounded-xl border border-yellow-800 bg-zinc-950 p-6 space-y-4">
               <h2 className="font-semibold text-white">Golden Gun</h2>
-              <p className="text-xs text-zinc-400">Release the golden gun to a team — expires at 9:59 PM today.</p>
-              <div className="flex gap-3">
-                <select
-                  className="flex-1 rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-white"
-                  value={goldenGunTeamId}
-                  onChange={(e) => setGoldenGunTeamId(e.target.value)}
-                >
-                  <option value="">Select team...</option>
-                  {teams.filter(t => t.status === 'active').map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => { if (goldenGunTeamId) action({ action: 'golden_gun', game_id: currentGame.id, team_id: goldenGunTeamId }) }}
-                  disabled={!goldenGunTeamId || loading}
-                  className="px-4 py-2 rounded-lg bg-yellow-700 text-white text-sm font-medium hover:bg-yellow-600 disabled:opacity-50"
-                >
-                  Release
-                </button>
-              </div>
+
+              {currentGun ? (
+                <div className="space-y-3">
+                  <div className="rounded-lg bg-yellow-950/30 border border-yellow-700 p-4 space-y-1">
+                    <div className="text-yellow-300 font-semibold text-sm">Currently Active</div>
+                    <div className="text-zinc-300 text-sm">
+                      Holder: <strong>{currentGun.holder?.name ?? '—'}</strong>
+                      {currentGun.holder?.teams?.name && (
+                        <span className="text-zinc-500 ml-1">({currentGun.holder.teams.name})</span>
+                      )}
+                    </div>
+                    <div className="text-zinc-400 text-xs">
+                      Expires: {new Date(currentGun.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => action({ action: 'return_golden_gun', event_id: currentGun.id })}
+                    disabled={loading}
+                    className="px-4 py-2 rounded-lg bg-zinc-700 text-white text-sm font-medium hover:bg-zinc-600 disabled:opacity-50"
+                  >
+                    Mark Returned
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-zinc-400">Register the player who picked up the golden gun. Expires 9:59 PM EDT today. An email notification will be sent to the holder.</p>
+                  <div className="flex gap-3">
+                    <select
+                      className="flex-1 rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-white"
+                      value={goldenGunPlayerId}
+                      onChange={(e) => setGoldenGunPlayerId(e.target.value)}
+                    >
+                      <option value="">Select player...</option>
+                      {teams.filter(t => t.status === 'active').map((team) => (
+                        <optgroup key={team.id} label={team.name}>
+                          {players
+                            .filter(p => p.team_id === team.id)
+                            .map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => { if (goldenGunPlayerId) action({ action: 'golden_gun', game_id: currentGame.id, player_id: goldenGunPlayerId }) }}
+                      disabled={!goldenGunPlayerId || loading}
+                      className="px-4 py-2 rounded-lg bg-yellow-700 text-white text-sm font-medium hover:bg-yellow-600 disabled:opacity-50"
+                    >
+                      Register
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
           )}
 

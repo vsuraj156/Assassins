@@ -118,6 +118,21 @@ export async function sendCheckinRejectedEmail(to: string, playerName: string) {
   })
 }
 
+export async function sendGoldenGunEmail(to: string, playerName: string, expiresAt: Date) {
+  const expiryStr = expiresAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })
+  await send({
+    to,
+    subject: '[Quincy Assassins] You have the Golden Gun',
+    html: `
+      <h2>You Hold the Golden Gun</h2>
+      <p>Hi ${playerName},</p>
+      <p>You've picked up the Golden Gun. You may eliminate <strong>any player in the game</strong> until <strong>${expiryStr} EDT</strong>.</p>
+      <p><strong>You must return the gun to MI6's Levesque Room by ${expiryStr}.</strong> If you fail to return it, all your kills today will be voided and your entire team will be exposed at midnight.</p>
+      <p>The gun is non-transferrable — it stays with you even if you are eliminated.</p>
+    `,
+  })
+}
+
 export async function sendKillApprovedEmail(
   to: string,
   killerName: string,

@@ -34,7 +34,9 @@ export default async function PlayerDashboard() {
 
   const db = createServerClient()
 
-  const [{ data: player }, { data: stuns }, teamResult, gameResult] = await Promise.all([
+  const now = new Date().toISOString()
+
+  const [{ data: player }, { data: stuns }, teamResult, gameResult, { data: goldenGun }] = await Promise.all([
     db.from('players')
       .select('*, team:teams!team_id(id, name, points, status, target_team_id, last_elimination_at)')
       .eq('id', session.user.playerId)
@@ -49,6 +51,12 @@ export default async function PlayerDashboard() {
     session.user.gameId
       ? db.from('games').select('name, status, totem_description, kill_blackout_hours').eq('id', session.user.gameId).single()
       : Promise.resolve({ data: null, error: null }),
+    db.from('golden_gun_events')
+      .select('holder_player_id, expires_at')
+      .eq('game_id', session.user.gameId ?? '')
+      .eq('status', 'active')
+      .gt('expires_at', now)
+      .single(),
   ])
 
   const today = new Date().toISOString().slice(0, 10)
@@ -113,6 +121,22 @@ export default async function PlayerDashboard() {
         </div>
         <p className="text-sm mt-3 text-zinc-400">{statusMessage[player?.status ?? 'active']}</p>
       </div>
+
+      {/* Golden gun banner */}
+      {goldenGun?.holder_player_id === session.user.playerId && (
+        <div className="rounded-xl border border-yellow-600 bg-yellow-950/30 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-yellow-300 font-semibold text-sm">You hold the Golden Gun</div>
+              <div className="text-yellow-600 text-xs mt-0.5">
+                You may eliminate any player until{' '}
+                {new Date(goldenGun.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
+                Return to MI6 before expiry or your kills will be voided and your team exposed.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Kill timer */}
       {showKillTimer && (

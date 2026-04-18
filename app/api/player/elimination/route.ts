@@ -53,13 +53,14 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString()
   const { data: goldenGun } = await db
     .from('golden_gun_events')
-    .select('holder_team_id')
+    .select('holder_player_id')
     .eq('game_id', killer.game_id)
     .eq('status', 'active')
     .gt('expires_at', now)
     .single()
 
   const validationResult = isKillValid({
+    killerPlayerId: killer.id,
     killerTeamId: killer.team_id!,
     targetTeamId: target.team_id!,
     targetStatus: target.status as import('@/types/game').PlayerStatus,
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     killerIsRogue: killer.is_rogue,
     targetIsRogue: target.is_rogue,
     goldenGunActive: !!goldenGun,
-    goldenGunHolderTeamId: goldenGun?.holder_team_id ?? null,
+    goldenGunHolderPlayerId: goldenGun?.holder_player_id ?? null,
   })
 
   if (!validationResult.valid) {
