@@ -77,6 +77,13 @@ export async function POST(req: NextRequest) {
       changed_by: session.user.playerId,
     })
 
+    // If the target held the golden gun, retire it — the gun is non-transferable
+    await db
+      .from('golden_gun_events')
+      .update({ status: 'returned', returned_at: now })
+      .eq('holder_player_id', elim.target_id)
+      .eq('status', 'active')
+
     // Award points to killer team
     const newPoints = (elim.killer_team?.points ?? 0) + elim.points
     await db.from('teams').update({ points: newPoints, last_elimination_at: now }).eq('id', elim.killer_team_id)
