@@ -131,3 +131,37 @@ export function stunExpiresAt(appliedAt: Date): Date {
   expires.setHours(0, 0, 0, 0)
   return expires
 }
+
+// Rule 2c: attending all three meals in one day downgrades status by one level.
+// Wanted → Exposed, Exposed → Active. Terminated/Amnesty: no change.
+export function nextStatusAfterFullDayMeals(current: PlayerStatus): PlayerStatus | null {
+  switch (current) {
+    case 'wanted': return 'exposed'
+    case 'exposed': return 'active'
+    default: return null
+  }
+}
+
+// Rule 2b: a player who has been Exposed for 48+ hours upgrades to Wanted.
+// Returns true if the penalty is due given the timestamp they became exposed.
+export function isExposedPenaltyDue(exposedSince: Date, now: Date): boolean {
+  return now.getTime() - exposedSince.getTime() >= 48 * 60 * 60 * 1000
+}
+
+// Rule 2a: the kill timer resets at midnight LOCAL TIME following an approved kill,
+// not at the kill timestamp itself.
+export function killTimerResetTime(eliminationApprovedAt: Date): Date {
+  const midnight = new Date(eliminationApprovedAt)
+  midnight.setDate(midnight.getDate() + 1)
+  midnight.setHours(0, 0, 0, 0)
+  return midnight
+}
+
+// Golden gun off-hours: 10 PM–midnight EDT the gun is not a weapon.
+// Returns true if the gun may be used as a weapon at the given UTC time.
+export function isGoldenGunHours(now: Date): boolean {
+  const edtTotalMins = ((now.getUTCHours() * 60 + now.getUTCMinutes() - 4 * 60) % (24 * 60) + 24 * 60) % (24 * 60)
+  // Valid: 0:01–21:59 EDT (1 minute after midnight through 9:59 PM)
+  // Invalid: 22:00–23:59 EDT (10 PM–midnight)
+  return edtTotalMins < 22 * 60
+}
