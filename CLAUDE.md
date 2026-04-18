@@ -14,7 +14,7 @@ Web platform for the Quincy House Harvard Assassins game. Replaces Google Sheets
 - **Database:** Supabase (PostgreSQL + Storage for photos)
 - **Auth:** NextAuth.js v5 — Google OAuth only (Harvard accounts)
 - **Email:** Resend
-- **Hosting:** Vercel + Vercel Cron Jobs
+- **Hosting:** Vercel + external cron scheduler (cron routes exist at `/api/cron/*`, triggered externally via `CRON_SECRET`)
 - **Styling:** Tailwind CSS
 
 ## Project Structure
@@ -35,7 +35,7 @@ types/game.ts     → All TypeScript interfaces
 middleware.ts     → Route protection
 supabase/schema.sql → Full DB schema — run this in Supabase SQL editor
 docs/plan.md      → Full implementation plan and architecture decisions
-vercel.json       → Cron job schedules
+vercel.json       → Vercel config (cron scheduling intentionally removed; crons run via external scheduler)
 ```
 
 ## Key Conventions
@@ -65,7 +65,7 @@ See `.env.local.example` for all required vars. Key ones:
 - **Daily check-in:** miss one → status advances. Cron runs at 11:59 PM.
 - **Team kill timer:** no kill in 48h → random team member exposed. Resets on next approved kill.
 - **Double-0:** worth 2 points when eliminated; can kill any other Double-0 regardless of target.
-- **Wars:** admin-approved; both teams can kill each other during an active war.
+- **Wars:** admin-created and admin-managed only; both teams can kill each other during an active war.
 - **Golden Gun:** admin releases to a team; expires at 9:59 PM same day; holder can kill anyone.
 - **Rogue agents:** can kill/be killed by anyone.
 - **Kill timer penalty:** kill-timer and check-in penalties are independent sources of status change. A kill reverts only kill-timer penalties (step each affected player back one level); check-in penalties stay. E.g. wanted (kill-timer exposed + missed check-in) → exposed after a kill.
@@ -74,7 +74,10 @@ See `.env.local.example` for all required vars. Key ones:
 
 ## What's Not Yet Built
 
-- Player profile photo upload page (`/signup/profile`)
-- War request form for players (only admin-side war management exists)
-- Push notifications / real-time updates (currently email only)
-- Double-0 designation UI for team captains (API exists at `POST /api/player/team` with `action: set_double_0`)
+- Push notifications / real-time updates (email-only is intentional; no plan to add)
+
+## Decisions Made
+
+- **Profile photo upload** is embedded in `/signup/create-team` and `/signup/join-team` — no separate `/signup/profile` page needed.
+- **Wars are admin-only** — players cannot request wars; only admins create/manage them via `/admin/wars`.
+- **Double-0 designation UI** exists in the captain's team roster card (`TeamRosterCard.tsx`) via `POST /api/player/team?action=set_double_0`.
