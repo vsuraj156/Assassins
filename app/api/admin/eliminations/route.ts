@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
     for (const teammate of penalizedTeammates ?? []) {
       const { data: lastExposure } = await db
         .from('status_history')
-        .select('reason')
+        .select('reason_code')
         .eq('entity_id', teammate.id)
         .eq('entity_type', 'player')
         .eq('new_status', 'exposed')
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
         .limit(1)
         .single()
 
-      if (!lastExposure?.reason?.toLowerCase().includes('kill')) continue
+      if (lastExposure?.reason_code !== 'kill_timer_penalty') continue
 
       const oldStatus = teammate.status as 'exposed' | 'wanted'
       const newStatus = oldStatus === 'wanted' ? 'exposed' : 'active'

@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
         old_status: oldStatus,
         new_status: newStatus,
         reason: `Team failed to make a kill within ${game.kill_blackout_hours} hours`,
+        reason_code: 'kill_timer_penalty',
         changed_by: null,
       })
       await db

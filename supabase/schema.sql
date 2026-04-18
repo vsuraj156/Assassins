@@ -128,6 +128,7 @@ CREATE TABLE status_history (
   old_status TEXT NOT NULL,
   new_status TEXT NOT NULL,
   reason TEXT,
+  reason_code TEXT,
   changed_by UUID REFERENCES players(id),  -- NULL = automated cron
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -150,3 +151,6 @@ CREATE INDEX idx_status_history_entity ON status_history(entity_type, entity_id)
 -- Migration: add general amnesty columns (safe to run on existing databases)
 ALTER TABLE games ADD COLUMN IF NOT EXISTS general_amnesty_active BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE games ADD COLUMN IF NOT EXISTS amnesty_started_at TIMESTAMPTZ;
+
+-- Migration: add reason_code to status_history for structured event discrimination
+ALTER TABLE status_history ADD COLUMN IF NOT EXISTS reason_code TEXT;
