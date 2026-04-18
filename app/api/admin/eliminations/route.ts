@@ -116,14 +116,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Recover exposed-due-kill-timer players on the killer's team
-    const { data: exposedTeammates } = await db
+    // Revert kill-timer penalties on the killer's team.
+    // The kill timer only ever moves active→exposed. Check-in penalties are separate.
+    // So for each penalized teammate, if their most recent 'exposed' entry was from the kill
+    // timer, step them back exactly one level (exposed→active, or wanted→exposed if they also
+    // missed a check-in after the timer hit them).
+    const { data: penalizedTeammates } = await db
       .from('players')
-      .select('id, name, user_email')
+      .select('id, name, user_email, status')
       .eq('team_id', elim.killer_team_id)
-      .eq('status', 'exposed')
+      .in('status', ['exposed', 'wanted'])
 
-    for (const teammate of exposedTeammates ?? []) {
+    for (const teammate of penalizedTeammates ?? []) {
       const { data: lastExposure } = await db
         .from('status_history')
         .select('reason')
@@ -134,18 +138,27 @@ export async function POST(req: NextRequest) {
         .limit(1)
         .single()
 
-      if (lastExposure?.reason?.toLowerCase().includes('kill')) {
-        await db.from('players').update({ status: 'active' }).eq('id', teammate.id)
-        await db.from('status_history').insert({
-          entity_type: 'player',
-          entity_id: teammate.id,
-          old_status: 'exposed',
-          new_status: 'active',
-          reason: 'Team made a kill — kill timer reset',
-          changed_by: session.user.playerId,
-        })
-        await sendStatusChangeEmail(teammate.user_email, teammate.name, 'exposed', 'active', 'Your team made a kill — you\'re back in action')
-      }
+      if (!lastExposure?.reason?.toLowerCase().includes('kill')) continue
+
+      const oldStatus = teammate.status as 'exposed' | 'wanted'
+      const newStatus = oldStatus === 'wanted' ? 'exposed' : 'active'
+
+      await db.from('players').update({ status: newStatus }).eq('id', teammate.id)
+      await db.from('status_history').insert({
+        entity_type: 'player',
+        entity_id: teammate.id,
+        old_status: oldStatus,
+        new_status: newStatus,
+        reason: 'Team made a kill — kill timer reset',
+        changed_by: session.user.playerId,
+      })
+      await sendStatusChangeEmail(
+        teammate.user_email,
+        teammate.name,
+        oldStatus,
+        newStatus,
+        "Your team made a kill — you're back in action"
+      )
     }
 
     // Send email to killer

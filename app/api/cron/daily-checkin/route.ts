@@ -21,6 +21,20 @@ export async function GET(req: NextRequest) {
   let processed = 0
 
   for (const game of games) {
+    // Auto-approve still-pending check-ins so a slow admin review doesn't penalize a player.
+    const { data: pending } = await db
+      .from('checkins')
+      .select('id')
+      .eq('game_id', game.id)
+      .eq('meal_date', today)
+      .eq('status', 'pending')
+    if (pending?.length) {
+      await db
+        .from('checkins')
+        .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+        .in('id', pending.map((c) => c.id))
+    }
+
     // Get all eligible players (active, exposed, wanted)
     const { data: players } = await db
       .from('players')

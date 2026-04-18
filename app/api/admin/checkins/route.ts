@@ -39,11 +39,17 @@ export async function POST(req: NextRequest) {
   // Fetch checkin first so we have player_id and meal_date for recovery logic
   const { data: checkin } = await db
     .from('checkins')
-    .select('player_id, meal_date, player:players!player_id(name, user_email)')
+    .select('id, player_id, meal_date')
     .eq('id', checkin_id)
     .single()
 
   if (!checkin) return NextResponse.json({ error: 'Check-in not found' }, { status: 404 })
+
+  const { data: checkinPlayer } = await db
+    .from('players')
+    .select('name, user_email')
+    .eq('id', checkin.player_id)
+    .single()
 
   const now = new Date().toISOString()
   const newStatus = action === 'approve' ? 'approved' : 'rejected'
@@ -57,55 +63,51 @@ export async function POST(req: NextRequest) {
 
   // On rejection: notify the player
   if (action === 'reject') {
-    const player = (Array.isArray(checkin.player) ? checkin.player[0] : checkin.player) as { name: string; user_email: string } | null
-    if (player) {
-      await sendCheckinRejectedEmail(player.user_email, player.name)
+    if (checkinPlayer) {
+      await sendCheckinRejectedEmail(checkinPlayer.user_email, checkinPlayer.name)
     }
   }
 
-  // On approval: check if player now has 3 approved check-ins on this meal_date
+  // On approval: check if player now has one approved check-in in each meal window today.
+  // If so, step them back one status level — but only for check-in faults, not kill-timer faults.
   if (action === 'approve') {
-    const { count } = await db
+    const { data: todayCheckins } = await db
       .from('checkins')
-      .select('*', { count: 'exact', head: true })
+      .select('meal_time')
       .eq('player_id', checkin.player_id)
       .eq('meal_date', checkin.meal_date)
       .eq('status', 'approved')
 
-    if ((count ?? 0) >= 3) {
+    const windows = new Set(todayCheckins?.map((c) => c.meal_time) ?? [])
+    const hasAllThree = windows.has('breakfast') && windows.has('lunch') && windows.has('dinner')
+
+    if (hasAllThree) {
       const { data: player } = await db
         .from('players')
         .select('id, status, name, user_email')
         .eq('id', checkin.player_id)
         .single()
 
-      if (player?.status === 'exposed') {
-        const { data: lastExposure } = await db
-          .from('status_history')
-          .select('reason')
-          .eq('entity_id', checkin.player_id)
-          .eq('entity_type', 'player')
-          .eq('new_status', 'exposed')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
+      if (player && (player.status === 'exposed' || player.status === 'wanted')) {
+        const oldStatus = player.status as 'exposed' | 'wanted'
+        const newStatus = oldStatus === 'wanted' ? 'exposed' : 'active'
 
-        if (!lastExposure?.reason?.toLowerCase().includes('kill')) {
-          await db.from('players').update({ status: 'active' }).eq('id', checkin.player_id)
-          await db.from('status_history').insert({
-            entity_type: 'player',
-            entity_id: checkin.player_id,
-            old_status: 'exposed',
-            new_status: 'active',
-            reason: '3 meal check-ins completed in a single day',
-            changed_by: session.user.playerId,
-          })
-          await sendStatusChangeEmail(
-            player.user_email, player.name,
-            'exposed', 'active',
-            '3 meal check-ins completed — you\'re back to active'
-          )
-        }
+        await db.from('players').update({ status: newStatus }).eq('id', checkin.player_id)
+        await db.from('status_history').insert({
+          entity_type: 'player',
+          entity_id: checkin.player_id,
+          old_status: oldStatus,
+          new_status: newStatus,
+          reason: 'Attended all three meals',
+          changed_by: session.user.playerId,
+        })
+        await sendStatusChangeEmail(
+          player.user_email,
+          player.name,
+          oldStatus,
+          newStatus,
+          'You attended all three meals today — status improved'
+        )
       }
     }
   }

@@ -55,7 +55,11 @@ See `.env.local.example` for all required vars. Key ones:
 - `AUTH_SECRET` — NextAuth secret (32+ chars)
 - `CRON_SECRET` — shared between Vercel and the cron route handlers
 
-## Game Rules Summary
+## Game Rules
+
+**Full rules:** https://quincyassassins.wordpress.com/rules/ — consult this whenever implementing or debugging game logic.
+
+### Summary
 
 - **Statuses:** `active → exposed → wanted → terminated` (also `amnesty`)
 - **Daily check-in:** miss one → status advances. Cron runs at 11:59 PM.
@@ -64,6 +68,7 @@ See `.env.local.example` for all required vars. Key ones:
 - **Wars:** admin-approved; both teams can kill each other during an active war.
 - **Golden Gun:** admin releases to a team; expires at 9:59 PM same day; holder can kill anyone.
 - **Rogue agents:** can kill/be killed by anyone.
+- **Kill timer penalty:** kill-timer and check-in penalties are independent sources of status change. A kill reverts only kill-timer penalties (step each affected player back one level); check-in penalties stay. E.g. wanted (kill-timer exposed + missed check-in) → exposed after a kill.
 - **Kill log blackout:** approved kills hidden from players for 48 hours.
 - **Target chain:** circular; when a team is fully eliminated, killer inherits their target.
 

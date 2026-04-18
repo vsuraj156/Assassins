@@ -22,6 +22,7 @@ CREATE TABLE teams (
   points INTEGER NOT NULL DEFAULT 0,
   target_team_id UUID REFERENCES teams(id),
   last_elimination_at TIMESTAMPTZ,
+  last_kill_penalty_at TIMESTAMPTZ,
   invite_code TEXT NOT NULL UNIQUE,
   captain_player_id UUID,
   name_status TEXT NOT NULL DEFAULT 'pending' CHECK (name_status IN ('pending', 'approved', 'rejected')),
@@ -75,10 +76,11 @@ CREATE TABLE checkins (
   photo_url TEXT NOT NULL,
   meal_date DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  meal_time TEXT CHECK (meal_time IN ('breakfast', 'lunch', 'dinner')),
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   reviewed_at TIMESTAMPTZ,
   reviewed_by UUID REFERENCES players(id),
-  UNIQUE (player_id, meal_date)
+  UNIQUE (player_id, meal_date, meal_time)
 );
 
 -- Stuns

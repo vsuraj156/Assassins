@@ -1,5 +1,17 @@
 import { PlayerStatus, WarStatus } from '@/types/game'
 
+export type MealWindow = 'breakfast' | 'lunch' | 'dinner'
+
+// Meal windows in Eastern Daylight Time (UTC-4).
+// Breakfast 7:30–11:00, Lunch 11:30–14:30, Dinner 17:00–20:00.
+export function getMealWindow(utcDate: Date): MealWindow | null {
+  const edtTotalMins = ((utcDate.getUTCHours() * 60 + utcDate.getUTCMinutes() - 4 * 60) % (24 * 60) + 24 * 60) % (24 * 60)
+  if (edtTotalMins >= 7 * 60 + 30 && edtTotalMins < 11 * 60) return 'breakfast'
+  if (edtTotalMins >= 11 * 60 + 30 && edtTotalMins < 14 * 60 + 30) return 'lunch'
+  if (edtTotalMins >= 17 * 60 && edtTotalMins < 20 * 60) return 'dinner'
+  return null
+}
+
 // Status progression when missing a daily check-in
 export function nextStatusAfterMissedCheckin(current: PlayerStatus): PlayerStatus | null {
   switch (current) {
