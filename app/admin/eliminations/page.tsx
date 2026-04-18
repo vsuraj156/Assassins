@@ -15,10 +15,19 @@ interface Elimination {
   target_team?: { name: string }
 }
 
+interface PendingCascade {
+  eliminatedTeamId: string
+  eliminatedTeamName: string
+  newTargetTeamId: string
+  newTargetTeamName: string
+  killerTeamId: string
+}
+
 export default function AdminEliminationsPage() {
   const [eliminations, setEliminations] = useState<Elimination[]>([])
   const [filter, setFilter] = useState('pending')
   const [loading, setLoading] = useState(false)
+  const [pendingCascade, setPendingCascade] = useState<PendingCascade | null>(null)
 
   useEffect(() => { fetchEliminations() }, [filter])
 
@@ -33,12 +42,44 @@ export default function AdminEliminationsPage() {
   async function act(eliminationId: string, action: 'approve' | 'reject') {
     if (action === 'approve' && !confirm('Approve this kill? This will terminate the target.')) return
     setLoading(true)
-    await fetch('/api/admin/eliminations', {
+    const res = await fetch('/api/admin/eliminations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ elimination_id: eliminationId, action }),
     })
+    const data = await res.json()
+    if (data.teamEliminated) {
+      setPendingCascade({
+        eliminatedTeamId: data.eliminatedTeamId,
+        eliminatedTeamName: data.eliminatedTeamName,
+        newTargetTeamId: data.newTargetTeamId,
+        newTargetTeamName: data.newTargetTeamName,
+        killerTeamId: data.killerTeamId,
+      })
+    }
     await fetchEliminations()
+    setLoading(false)
+  }
+
+  async function advanceTargetChain(dryRun: boolean) {
+    if (!pendingCascade) return
+    setLoading(true)
+    const res = await fetch('/api/admin/eliminations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'advance_target_chain',
+        eliminated_team_id: pendingCascade.eliminatedTeamId,
+        killer_team_id: pendingCascade.killerTeamId,
+        dry_run: dryRun,
+      }),
+    })
+    const data = await res.json()
+    if (dryRun) {
+      alert(`Dry run:\n- Eliminated team: ${data.eliminatedTeamName}\n- New target: ${data.newTargetTeamName}\n- Players to notify: ${data.playersToNotify.map((p: { name: string; email: string }) => `${p.name} (${p.email})`).join(', ')}`)
+    } else {
+      setPendingCascade(null)
+    }
     setLoading(false)
   }
 
@@ -58,6 +99,39 @@ export default function AdminEliminationsPage() {
           ))}
         </div>
       </div>
+
+      {pendingCascade && (
+        <div className="rounded-xl border border-yellow-600 bg-yellow-950 p-5 space-y-3">
+          <p className="text-yellow-300 font-semibold">Team eliminated — target chain needs advancing</p>
+          <p className="text-sm text-yellow-200">
+            <strong>{pendingCascade.eliminatedTeamName}</strong> is fully eliminated.
+            The killer's team will inherit their target: <strong>{pendingCascade.newTargetTeamName}</strong>.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => advanceTargetChain(true)}
+              disabled={loading}
+              className="px-3 py-1 rounded bg-yellow-800 text-yellow-200 text-xs font-medium hover:bg-yellow-700 disabled:opacity-50"
+            >
+              Dry run (preview)
+            </button>
+            <button
+              onClick={() => advanceTargetChain(false)}
+              disabled={loading}
+              className="px-3 py-1 rounded bg-green-800 text-green-300 text-xs font-medium hover:bg-green-700 disabled:opacity-50"
+            >
+              Confirm &amp; advance
+            </button>
+            <button
+              onClick={() => setPendingCascade(null)}
+              disabled={loading}
+              className="px-3 py-1 rounded bg-zinc-800 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {eliminations.map((e) => (

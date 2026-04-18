@@ -81,47 +81,27 @@ export async function POST(req: NextRequest) {
     const newPoints = (elim.killer_team?.points ?? 0) + elim.points
     await db.from('teams').update({ points: newPoints, last_elimination_at: now }).eq('id', elim.killer_team_id)
 
-    // Check if target team is fully eliminated
+    // Check if target team is fully eliminated — if so, return info for admin to confirm cascade
     const { data: survivors } = await db
       .from('players')
       .select('id')
       .eq('team_id', elim.target_team_id)
       .not('status', 'eq', 'terminated')
 
+    let teamEliminatedPayload: { teamEliminated: true; eliminatedTeamId: string; eliminatedTeamName: string; newTargetTeamId: string; newTargetTeamName: string; killerTeamId: string } | null = null
+
     if (!survivors || survivors.length === 0) {
-      const { data: targetTeam } = await db.from('teams').select('status').eq('id', elim.target_team_id).single()
-      if (targetTeam?.status === 'active') {
-        await db.from('teams').update({ status: 'eliminated' }).eq('id', elim.target_team_id)
-        await db.from('status_history').insert({
-          entity_type: 'team',
-          entity_id: elim.target_team_id,
-          old_status: 'active',
-          new_status: 'eliminated',
-          reason: 'All members eliminated',
-          changed_by: session.user.playerId,
-        })
-
-        // Advance the target chain: killer team inherits the eliminated team's target
-        const { data: eliminatedTeam } = await db
-          .from('teams')
-          .select('target_team_id')
-          .eq('id', elim.target_team_id)
-          .single()
-        if (eliminatedTeam?.target_team_id && eliminatedTeam.target_team_id !== elim.killer_team_id) {
-          const newTargetId = eliminatedTeam.target_team_id
-          await db.from('teams').update({ target_team_id: newTargetId }).eq('id', elim.killer_team_id)
-
-          const [{ data: newTargetTeam }, { data: killerTeamPlayers }] = await Promise.all([
-            db.from('teams').select('name').eq('id', newTargetId).single(),
-            db.from('players').select('name, user_email').eq('team_id', elim.killer_team_id).neq('status', 'terminated'),
-          ])
-
-          if (newTargetTeam) {
-            for (const player of killerTeamPlayers ?? []) {
-              if (player.user_email) {
-                await sendTargetUpdateEmail(player.user_email, player.name, newTargetTeam.name)
-              }
-            }
+      const { data: targetTeam } = await db.from('teams').select('status, name, target_team_id').eq('id', elim.target_team_id).single()
+      if (targetTeam?.status === 'active' && targetTeam.target_team_id && targetTeam.target_team_id !== elim.killer_team_id) {
+        const { data: newTargetTeam } = await db.from('teams').select('name').eq('id', targetTeam.target_team_id).single()
+        if (newTargetTeam) {
+          teamEliminatedPayload = {
+            teamEliminated: true,
+            eliminatedTeamId: elim.target_team_id,
+            eliminatedTeamName: targetTeam.name,
+            newTargetTeamId: targetTeam.target_team_id,
+            newTargetTeamName: newTargetTeam.name,
+            killerTeamId: elim.killer_team_id,
           }
         }
       }
@@ -180,6 +160,63 @@ export async function POST(req: NextRequest) {
     // Notify target
     if (elim.target?.user_email) {
       await sendStatusChangeEmail(elim.target.user_email, elim.target.name, prevStatus, 'terminated', `Eliminated by ${elim.killer?.name}`)
+    }
+
+    return NextResponse.json({ success: true, ...(teamEliminatedPayload ?? {}) })
+  }
+
+  if (action === 'advance_target_chain') {
+    const { eliminated_team_id, killer_team_id, dry_run } = body
+
+    const { data: eliminatedTeam } = await db
+      .from('teams')
+      .select('name, target_team_id, status')
+      .eq('id', eliminated_team_id)
+      .single()
+
+    if (!eliminatedTeam) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
+
+    const newTargetId = eliminatedTeam.target_team_id
+    if (!newTargetId || newTargetId === killer_team_id) {
+      return NextResponse.json({ error: 'No valid target to advance to' }, { status: 400 })
+    }
+
+    const { data: newTargetTeam } = await db.from('teams').select('name').eq('id', newTargetId).single()
+    const { data: killerTeamPlayers } = await db
+      .from('players')
+      .select('name, user_email')
+      .eq('team_id', killer_team_id)
+      .neq('status', 'terminated')
+
+    if (dry_run) {
+      return NextResponse.json({
+        dry_run: true,
+        eliminatedTeamName: eliminatedTeam.name,
+        newTargetTeamName: newTargetTeam?.name,
+        playersToNotify: (killerTeamPlayers ?? []).map((p) => ({ name: p.name, email: p.user_email })),
+      })
+    }
+
+    if (eliminatedTeam.status === 'active') {
+      await db.from('teams').update({ status: 'eliminated' }).eq('id', eliminated_team_id)
+      await db.from('status_history').insert({
+        entity_type: 'team',
+        entity_id: eliminated_team_id,
+        old_status: 'active',
+        new_status: 'eliminated',
+        reason: 'All members eliminated',
+        changed_by: session.user.playerId,
+      })
+    }
+
+    await db.from('teams').update({ target_team_id: newTargetId }).eq('id', killer_team_id)
+
+    if (newTargetTeam) {
+      for (const player of killerTeamPlayers ?? []) {
+        if (player.user_email) {
+          await sendTargetUpdateEmail(player.user_email, player.name, newTargetTeam.name)
+        }
+      }
     }
 
     return NextResponse.json({ success: true })
