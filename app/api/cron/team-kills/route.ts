@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/db'
 import { sendStatusChangeEmail } from '@/lib/email'
+import { killTimerResetTime } from '@/lib/game-engine'
 
 // Runs every hour via external scheduler
 export async function GET(req: NextRequest) {
@@ -33,9 +34,9 @@ export async function GET(req: NextRequest) {
     if (!teams) continue
 
     for (const team of teams) {
-      // The kill timer runs from last kill, or game start if the team has never killed.
+      // The kill timer runs from midnight following last kill (Rule 2a), or game start if the team has never killed.
       const referenceMs = team.last_elimination_at
-        ? new Date(team.last_elimination_at).getTime()
+        ? killTimerResetTime(new Date(team.last_elimination_at)).getTime()
         : game.start_time
         ? new Date(game.start_time).getTime()
         : null
