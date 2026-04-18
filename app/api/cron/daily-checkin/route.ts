@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/db'
-import { nextStatusAfterMissedCheckin } from '@/lib/game-engine'
+import { isExposedPenaltyDue, nextStatusAfterMissedCheckin } from '@/lib/game-engine'
 import { sendStatusChangeEmail } from '@/lib/email'
 import { PlayerStatus } from '@/types/game'
 
@@ -12,7 +12,8 @@ export async function GET(req: NextRequest) {
   }
 
   const db = createServerClient()
-  const today = new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  const today = now.toISOString().slice(0, 10)
 
   // Get all active games
   const { data: games } = await db
@@ -59,7 +60,44 @@ export async function GET(req: NextRequest) {
 
     const checkedInPlayerIds = new Set(checkins?.map((c) => c.player_id) ?? [])
 
+    // Rule 2b: find when each currently-exposed player became exposed
+    const exposedPlayerIds = players.filter(p => p.status === 'exposed').map(p => p.id)
+    const exposedSinceMap = new Map<string, Date>()
+    if (exposedPlayerIds.length > 0) {
+      const { data: history } = await db
+        .from('status_history')
+        .select('entity_id, created_at')
+        .eq('entity_type', 'player')
+        .eq('new_status', 'exposed')
+        .in('entity_id', exposedPlayerIds)
+        .order('created_at', { ascending: false })
+      for (const row of history ?? []) {
+        if (!exposedSinceMap.has(row.entity_id)) {
+          exposedSinceMap.set(row.entity_id, new Date(row.created_at))
+        }
+      }
+    }
+
     for (const player of players) {
+      // Rule 2b: exposed 48+ hours → wanted, independent of check-in status
+      if (player.status === 'exposed') {
+        const exposedSince = exposedSinceMap.get(player.id)
+        if (exposedSince && isExposedPenaltyDue(exposedSince, now)) {
+          await db.from('players').update({ status: 'wanted' }).eq('id', player.id)
+          await db.from('status_history').insert({
+            entity_type: 'player',
+            entity_id: player.id,
+            old_status: 'exposed',
+            new_status: 'wanted',
+            reason: 'Exposed for 48+ hours',
+            changed_by: null,
+          })
+          await sendStatusChangeEmail(player.user_email, player.name, 'exposed', 'wanted', 'Exposed for 48+ hours')
+          processed++
+          continue // skip missed check-in check for this player
+        }
+      }
+
       if (checkedInPlayerIds.has(player.id)) continue
 
       const nextStatus = nextStatusAfterMissedCheckin(player.status as PlayerStatus)
