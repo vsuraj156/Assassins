@@ -9,6 +9,7 @@ interface Game {
   start_time: string | null
   kill_blackout_hours: number
   totem_description: string | null
+  general_amnesty_active: boolean
 }
 
 interface Team {
@@ -240,6 +241,36 @@ export default function GameControlPage() {
                   Clear Seed Data
                 </button>
               </div>
+            </section>
+          )}
+
+          {/* General Amnesty */}
+          {currentGame.status === 'active' && (
+            <section className={`rounded-xl border p-6 space-y-4 ${currentGame.general_amnesty_active ? 'border-blue-700 bg-blue-950/20' : 'border-zinc-800 bg-zinc-950'}`}>
+              <div>
+                <h2 className="font-semibold text-white">General Amnesty</h2>
+                <p className="text-xs text-zinc-400 mt-1">
+                  {currentGame.general_amnesty_active
+                    ? 'Amnesty is active. All kills are blocked and cron penalties are paused. Kill timers will be shifted forward when you end amnesty.'
+                    : 'Start amnesty to pause all kills and cron penalties game-wide.'}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  const msg = currentGame.general_amnesty_active
+                    ? 'End general amnesty? Kill timers will be shifted to account for the pause.'
+                    : 'Start general amnesty? All kills will be blocked until you end it.'
+                  if (confirm(msg)) action({ action: 'toggle_amnesty', game_id: currentGame.id })
+                }}
+                disabled={loading}
+                className={`px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors ${
+                  currentGame.general_amnesty_active
+                    ? 'bg-blue-700 text-white hover:bg-blue-600'
+                    : 'bg-zinc-700 text-white hover:bg-zinc-600'
+                }`}
+              >
+                {currentGame.general_amnesty_active ? 'End Amnesty' : 'Start Amnesty'}
+              </button>
             </section>
           )}
 

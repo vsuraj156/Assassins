@@ -51,9 +51,14 @@ export interface KillValidationContext {
   targetIsRogue: boolean
   goldenGunActive: boolean
   goldenGunHolderPlayerId?: string | null
+  generalAmnestyActive?: boolean
 }
 
 export function isKillValid(ctx: KillValidationContext): { valid: boolean; reason?: string } {
+  if (ctx.generalAmnestyActive) {
+    return { valid: false, reason: 'General amnesty is active — no kills are permitted' }
+  }
+
   // Teammate restriction overrides everything except rogue status
   if (ctx.killerTeamId === ctx.targetTeamId && !ctx.killerIsRogue && !ctx.targetIsRogue) {
     return { valid: false, reason: 'Cannot eliminate a teammate' }

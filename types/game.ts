@@ -17,6 +17,8 @@ export interface Game {
   end_time: string | null
   kill_blackout_hours: number
   totem_description: string | null
+  general_amnesty_active: boolean
+  amnesty_started_at: string | null
   created_at: string
 }
 

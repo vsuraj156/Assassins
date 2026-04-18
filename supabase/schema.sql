@@ -10,6 +10,8 @@ CREATE TABLE games (
   end_time TIMESTAMPTZ,
   kill_blackout_hours INTEGER NOT NULL DEFAULT 48,
   totem_description TEXT,
+  general_amnesty_active BOOLEAN NOT NULL DEFAULT FALSE,
+  amnesty_started_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -144,3 +146,7 @@ CREATE INDEX idx_status_history_entity ON status_history(entity_type, entity_id)
 
 -- Supabase Storage bucket (run in Supabase dashboard or via API)
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('assassins', 'assassins', true);
+
+-- Migration: add general amnesty columns (safe to run on existing databases)
+ALTER TABLE games ADD COLUMN IF NOT EXISTS general_amnesty_active BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS amnesty_started_at TIMESTAMPTZ;

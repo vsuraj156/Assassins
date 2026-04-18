@@ -15,13 +15,15 @@ export async function GET(req: NextRequest) {
 
   const { data: games } = await db
     .from('games')
-    .select('id, kill_blackout_hours, start_time')
+    .select('id, kill_blackout_hours, start_time, general_amnesty_active')
     .eq('status', 'active')
   if (!games?.length) return NextResponse.json({ penalized: 0 })
 
   let penalized = 0
 
   for (const game of games) {
+    if (game.general_amnesty_active) continue
+
     const { data: teams } = await db
       .from('teams')
       .select('id, last_elimination_at, last_kill_penalty_at')
