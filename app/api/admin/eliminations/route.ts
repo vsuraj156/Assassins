@@ -98,6 +98,9 @@ export async function POST(req: NextRequest) {
     let teamEliminatedPayload: { teamEliminated: true; eliminatedTeamId: string; eliminatedTeamName: string; newTargetTeamId: string; newTargetTeamName: string; hunterTeamId: string; killerTeamId: string } | null = null
 
     if (!survivors || survivors.length === 0) {
+      // Rule XV: award +1 bonus point for full unit elimination
+      await db.from('teams').update({ points: newPoints + 1 }).eq('id', elim.killer_team_id)
+
       const { data: targetTeam } = await db.from('teams').select('status, name, target_team_id').eq('id', elim.target_team_id).single()
       // The hunter is the team whose assigned target was just eliminated — they inherit the chain, not necessarily the killer.
       const { data: hunterTeam } = await db.from('teams').select('id').eq('target_team_id', elim.target_team_id).eq('status', 'active').single()
