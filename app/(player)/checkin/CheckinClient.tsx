@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ensureJpeg } from '@/lib/convertImage'
+import { preparePhoto } from '@/lib/convertImage'
 
 interface Checkin {
   id: string
@@ -64,7 +64,7 @@ export default function CheckinClient() {
       if (!urlRes.ok) throw new Error(urlData.error)
       const { signedUrl, path } = urlData
 
-      const uploadFile = await ensureJpeg(file)
+      const uploadFile = await preparePhoto(file)
       const uploadRes = await fetch(signedUrl, {
         method: 'PUT',
         body: uploadFile,
