@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/db'
+import { PhotoModal } from '@/components/PhotoModal'
 
 export const dynamic = 'force-dynamic'
 
@@ -120,17 +121,7 @@ export default async function AdminLeaderboardPage() {
                   ) : null}
 
                   <td className="px-2 py-1">
-                    {player.photo_url ? (
-                      <img
-                        src={player.photo_url}
-                        alt={player.name}
-                        className={`w-7 h-7 rounded-full object-cover ${player.status === 'terminated' ? 'opacity-30 grayscale' : ''}`}
-                      />
-                    ) : (
-                      <div className={`w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-medium ${player.status === 'terminated' ? 'opacity-30' : 'text-zinc-400'}`}>
-                        {player.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <PhotoModal src={player.photo_url} name={player.name} terminated={player.status === 'terminated'} />
                   </td>
 
                   <td className="px-3 py-1.5">
