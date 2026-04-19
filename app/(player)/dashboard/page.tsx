@@ -1,6 +1,8 @@
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
+import { killTimerResetTime } from '@/lib/game-engine'
 import Link from 'next/link'
+import KillTimerCard from './KillTimerCard'
 import TeamRosterCard from './TeamRosterCard'
 
 export const dynamic = 'force-dynamic'
@@ -21,12 +23,6 @@ const statusMessage: Record<string, string> = {
   amnesty: 'You are under amnesty.',
 }
 
-function killTimerStyle(hours: number | null) {
-  if (hours === null || hours <= 6)  return { border: 'border-red-800',    text: 'text-red-400',    bg: 'bg-red-950/20' }
-  if (hours <= 12)                   return { border: 'border-orange-800', text: 'text-orange-400', bg: 'bg-orange-950/20' }
-  if (hours <= 24)                   return { border: 'border-yellow-800', text: 'text-yellow-400', bg: 'bg-yellow-950/10' }
-  return                                    { border: 'border-zinc-700',   text: 'text-zinc-300',   bg: '' }
-}
 
 export default async function PlayerDashboard() {
   const session = await auth()
@@ -38,7 +34,7 @@ export default async function PlayerDashboard() {
 
   const [{ data: player }, { data: stuns }, teamResult, gameResult, { data: goldenGun }] = await Promise.all([
     db.from('players')
-      .select('*, team:teams!team_id(id, name, points, status, target_team_id, last_elimination_at)')
+      .select('*, team:teams!team_id(id, name, points, status, target_team_id, last_elimination_at, last_kill_penalty_at)')
       .eq('id', session.user.playerId)
       .single(),
     db.from('stuns')
@@ -49,7 +45,7 @@ export default async function PlayerDashboard() {
       ? db.from('teams').select('*, captain_player_id, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single()
       : Promise.resolve({ data: null, error: null }),
     session.user.gameId
-      ? db.from('games').select('name, status, totem_description, kill_blackout_hours, general_amnesty_active').eq('id', session.user.gameId).single()
+      ? db.from('games').select('name, status, totem_description, kill_blackout_hours, general_amnesty_active, start_time').eq('id', session.user.gameId).single()
       : Promise.resolve({ data: null, error: null }),
     db.from('golden_gun_events')
       .select('holder_player_id, expires_at')
@@ -63,6 +59,7 @@ export default async function PlayerDashboard() {
   const teamData = player?.team as {
     id: string; name: string; points: number; status: string
     target_team_id: string | null; last_elimination_at: string | null
+    last_kill_penalty_at: string | null
   } | null
 
   // Second batch — needs player/team data resolved first
@@ -94,14 +91,32 @@ export default async function PlayerDashboard() {
   const playerAlive = player?.status !== 'terminated'
   const killBlackoutHours: number = (game?.data as { kill_blackout_hours?: number } | null)?.kill_blackout_hours ?? 48
   const generalAmnestyActive: boolean = (game?.data as { general_amnesty_active?: boolean } | null)?.general_amnesty_active ?? false
-
-  let killHoursLeft: number | null = null // null = no kills yet (already at risk)
-  if (gameIsActive && teamIsActive && playerAlive && teamData?.last_elimination_at) {
-    const deadline = new Date(teamData.last_elimination_at).getTime() + killBlackoutHours * 60 * 60 * 1000
-    killHoursLeft = Math.max(0, (deadline - Date.now()) / (1000 * 60 * 60))
-  }
   const showKillTimer = gameIsActive && teamIsActive && playerAlive
-  const timerStyle = killTimerStyle(killHoursLeft)
+
+  const INITIAL_MS = killBlackoutHours * 60 * 60 * 1000
+  const REPEAT_MS = 24 * 60 * 60 * 1000
+
+  let killTimerDeadlineMs: number | null = null
+  if (showKillTimer) {
+    const rawRef = teamData?.last_elimination_at
+      ? killTimerResetTime(new Date(teamData.last_elimination_at)).getTime()
+      : (game?.data as { start_time?: string } | null)?.start_time
+        ? new Date((game!.data as { start_time: string }).start_time).getTime()
+        : null
+    if (rawRef !== null) {
+      const lastPenaltyMs = teamData?.last_kill_penalty_at
+        ? new Date(teamData.last_kill_penalty_at).getTime()
+        : null
+      const nowMs = Date.now()
+      if (nowMs < rawRef + INITIAL_MS) {
+        killTimerDeadlineMs = rawRef + INITIAL_MS
+      } else if (lastPenaltyMs) {
+        killTimerDeadlineMs = lastPenaltyMs + REPEAT_MS
+      } else {
+        killTimerDeadlineMs = rawRef + INITIAL_MS // already past — shows 0
+      }
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -151,26 +166,7 @@ export default async function PlayerDashboard() {
 
       {/* Kill timer */}
       {showKillTimer && (
-        <div className={`rounded-xl border p-4 ${timerStyle.border} ${timerStyle.bg}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs text-zinc-500 mb-0.5">Team Kill Timer</div>
-              <div className={`text-sm font-semibold ${timerStyle.text}`}>
-                {killHoursLeft === null
-                  ? 'No kills yet — your team is at risk'
-                  : killHoursLeft < 1
-                  ? 'Under 1 hour remaining!'
-                  : `${Math.floor(killHoursLeft)}h ${Math.floor((killHoursLeft % 1) * 60)}m remaining`}
-              </div>
-            </div>
-            <div className="text-xs text-zinc-600">{killBlackoutHours}h window</div>
-          </div>
-          {(killHoursLeft === null || killHoursLeft <= 12) && (
-            <p className="text-xs text-zinc-500 mt-2">
-              A random active teammate will be exposed if no kill is made in time.
-            </p>
-          )}
-        </div>
+        <KillTimerCard deadlineMs={killTimerDeadlineMs} killWindowHours={killBlackoutHours} />
       )}
 
       {/* Quick actions */}
