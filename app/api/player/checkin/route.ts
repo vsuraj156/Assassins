@@ -40,6 +40,11 @@ export async function POST(req: NextRequest) {
   if (!player) return NextResponse.json({ error: 'Player not found' }, { status: 404 })
   if (player.status === 'terminated') return NextResponse.json({ error: 'Terminated players cannot submit check-ins' }, { status: 403 })
 
+  const { data: game } = await db.from('games').select('status').eq('id', player.game_id).single()
+  if (game?.status !== 'active') {
+    return NextResponse.json({ error: 'The game has not started yet' }, { status: 403 })
+  }
+
   if (!mealWindow) {
     return NextResponse.json({ error: 'Check-ins are only accepted during meal times (Breakfast 7:30–11am, Lunch 11:30am–2:30pm, Dinner 5–8pm EDT)' }, { status: 400 })
   }

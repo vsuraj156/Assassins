@@ -25,12 +25,15 @@ export async function POST(req: NextRequest) {
   if (!killer) return NextResponse.json({ error: 'Killer not found' }, { status: 404 })
   if (killer.status === 'terminated') return NextResponse.json({ error: 'You are terminated' }, { status: 403 })
 
-  // Block kills during general amnesty
+  // Block kills if game isn't active or during general amnesty
   const { data: gameRow } = await db
     .from('games')
-    .select('general_amnesty_active')
+    .select('status, general_amnesty_active')
     .eq('id', killer.game_id)
     .single()
+  if (gameRow?.status !== 'active') {
+    return NextResponse.json({ error: 'The game has not started yet' }, { status: 403 })
+  }
   if (gameRow?.general_amnesty_active) {
     return NextResponse.json({ error: 'General amnesty is active — no kills are permitted' }, { status: 403 })
   }

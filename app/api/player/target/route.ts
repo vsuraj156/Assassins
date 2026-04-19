@@ -14,6 +14,11 @@ export async function GET() {
   const myPlayerId = session.user.playerId
   const myGameId = session.user.gameId
 
+  const { data: game } = await db.from('games').select('status').eq('id', myGameId).single()
+  if (game?.status !== 'active') {
+    return NextResponse.json({ error: 'The game has not started yet' }, { status: 403 })
+  }
+
   const now = new Date().toISOString()
 
   const [
