@@ -17,7 +17,7 @@ export default function CreateTeamPage() {
   const [error, setError] = useState('')
 
   async function handleCreate() {
-    if (!teamName || !playerName || !gameId) {
+    if (!teamName || !playerName || !gameId || !codeName || !photoFile) {
       setError('Please fill in all required fields.')
       return
     }
@@ -43,8 +43,8 @@ export default function CreateTeamPage() {
       return
     }
 
-    // Upload profile photo if selected
-    if (photoFile && data.player?.id) {
+    // Upload profile photo
+    if (data.player?.id) {
       try {
         const urlRes = await fetch('/api/player/profile', {
           method: 'POST',
@@ -60,7 +60,11 @@ export default function CreateTeamPage() {
           body: JSON.stringify({ action: 'save', player_id: data.player.id, photo_url: publicUrl }),
         })
       } catch {
-        // Non-fatal: player can update photo later
+        setInviteCode(data.team.invite_code)
+        setStep('success')
+        setLoading(false)
+        setError('Team created, but your photo failed to upload. Please update it from your dashboard.')
+        return
       }
     }
 
@@ -139,7 +143,7 @@ export default function CreateTeamPage() {
         </div>
 
         <div>
-          <label className="block text-sm text-zinc-300 mb-2">Code Name <span className="text-zinc-500">(optional)</span></label>
+          <label className="block text-sm text-zinc-300 mb-2">Code Name <span className="text-red-400">*</span></label>
           <input
             className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
             placeholder="Your secret agent alias..."
@@ -150,7 +154,7 @@ export default function CreateTeamPage() {
         </div>
 
         <div>
-          <label className="block text-sm text-zinc-300 mb-2">Profile Photo <span className="text-zinc-500">(optional)</span></label>
+          <label className="block text-sm text-zinc-300 mb-2">Profile Photo <span className="text-red-400">*</span></label>
           <div
             className="rounded-lg border border-dashed border-zinc-700 bg-zinc-900 p-4 text-center cursor-pointer hover:border-zinc-500 transition-colors"
             onClick={() => document.getElementById('photo-input-create')?.click()}
