@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { createServerClient } from '@/lib/db'
 import { sendStatusChangeEmail } from '@/lib/email'
 import { killTimerResetTime, isKillTimerPenaltyDue } from '@/lib/game-engine'
 import { repairTargetChainIfTeamEliminated } from '@/lib/target-chain'
 
-// Runs every hour via external scheduler
-export async function GET(req: NextRequest) {
-  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+async function runKillTimerCron() {
   const db = createServerClient()
   const now = Date.now()
   const INITIAL_WINDOW_MS = 48 * 60 * 60 * 1000
@@ -19,9 +15,7 @@ export async function GET(req: NextRequest) {
     .from('games')
     .select('id, kill_blackout_hours, start_time, general_amnesty_active')
     .eq('status', 'active')
-  if (!games?.length) return NextResponse.json({ penalized: 0 })
-
-  let penalized = 0
+  if (!games?.length) return
 
   for (const game of games) {
     if (game.general_amnesty_active) continue
@@ -35,7 +29,6 @@ export async function GET(req: NextRequest) {
     if (!teams) continue
 
     for (const team of teams) {
-      // The kill timer runs from midnight following last kill (Rule 2a), or game start if the team has never killed.
       const referenceMs = team.last_elimination_at
         ? killTimerResetTime(new Date(team.last_elimination_at)).getTime()
         : game.start_time
@@ -50,7 +43,6 @@ export async function GET(req: NextRequest) {
 
       if (!isKillTimerPenaltyDue(referenceMs, lastPenaltyMs, now, INITIAL_WINDOW_MS, REPEAT_WINDOW_MS)) continue
 
-      // Tiered selection: active → exposed → wanted
       const { data: teamPlayers } = await db
         .from('players')
         .select('id, name, user_email, status')
@@ -94,10 +86,16 @@ export async function GET(req: NextRequest) {
       if (newStatus === 'terminated') {
         await repairTargetChainIfTeamEliminated(db, team.id)
       }
-
-      penalized++
     }
   }
+}
 
-  return NextResponse.json({ penalized })
+// Runs every hour via external scheduler
+export async function GET(req: NextRequest) {
+  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  waitUntil(runKillTimerCron())
+  return NextResponse.json({ accepted: true }, { status: 202 })
 }

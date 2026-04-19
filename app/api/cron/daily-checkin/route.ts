@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { createServerClient } from '@/lib/db'
 import { isExposedPenaltyDue, nextStatusAfterMissedCheckin } from '@/lib/game-engine'
 import { sendStatusChangeEmail } from '@/lib/email'
 import { repairTargetChainIfTeamEliminated } from '@/lib/target-chain'
 import { PlayerStatus } from '@/types/game'
 
-// Runs at 11:59 PM daily via Vercel Cron
-export async function GET(req: NextRequest) {
-  // Verify Vercel cron secret
-  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+async function runCheckinCron() {
   const db = createServerClient()
   const now = new Date()
   // Game runs in EDT (UTC-4). Cron fires at 11:59 PM EDT = 3:59 AM UTC next day,
@@ -24,7 +19,7 @@ export async function GET(req: NextRequest) {
     .from('games')
     .select('id, general_amnesty_active')
     .eq('status', 'active')
-  if (!games?.length) return NextResponse.json({ processed: 0 })
+  if (!games?.length) return
 
   let processed = 0
 
@@ -131,5 +126,14 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ processed, date: today })
+}
+
+// Runs at 11:59 PM daily via external scheduler
+export async function GET(req: NextRequest) {
+  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  waitUntil(runCheckinCron())
+  return NextResponse.json({ accepted: true }, { status: 202 })
 }
