@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ensureJpeg } from '@/lib/convertImage'
 
 export default function JoinTeamPage() {
   const router = useRouter()
@@ -50,7 +51,8 @@ export default function JoinTeamPage() {
           body: JSON.stringify({ action: 'get_upload_url', player_id: data.player.id }),
         })
         const { signedUrl, path } = await urlRes.json()
-        await fetch(signedUrl, { method: 'PUT', body: photoFile, headers: { 'Content-Type': photoFile.type } })
+        const uploadFile = await ensureJpeg(photoFile)
+        await fetch(signedUrl, { method: 'PUT', body: uploadFile, headers: { 'Content-Type': uploadFile.type } })
         const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/assassins/${path}`
         await fetch('/api/player/profile', {
           method: 'POST',
