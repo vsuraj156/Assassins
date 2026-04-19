@@ -10,7 +10,8 @@ export async function GET() {
   if (!session?.user?.playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const db = createServerClient()
-  const today = new Date().toISOString().slice(0, 10)
+  // EDT (UTC-4) calendar date — must match what the cron uses
+  const today = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
   const { data } = await db
     .from('checkins')
@@ -30,8 +31,9 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const db = createServerClient()
-  const today = new Date().toISOString().slice(0, 10)
   const now = new Date()
+  // EDT (UTC-4) calendar date — must match what the cron uses
+  const today = new Date(now.getTime() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const mealWindow = getMealWindow(now)
 
   const { data: player } = await db.from('players').select('game_id, status').eq('id', session.user.playerId).single()

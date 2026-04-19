@@ -14,7 +14,10 @@ export async function GET(req: NextRequest) {
 
   const db = createServerClient()
   const now = new Date()
-  const today = now.toISOString().slice(0, 10)
+  // Game runs in EDT (UTC-4). Cron fires at 11:59 PM EDT = 3:59 AM UTC next day,
+  // so we must compute the EDT calendar date, not the UTC date.
+  const edtNow = new Date(now.getTime() - 4 * 60 * 60 * 1000)
+  const today = edtNow.toISOString().slice(0, 10)
 
   // Get all active games
   const { data: games } = await db
