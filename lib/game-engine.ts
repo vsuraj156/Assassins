@@ -163,6 +163,26 @@ export function killTimerResetTime(eliminationApprovedAt: Date): Date {
   return midnight
 }
 
+// Rule 2a: whether a kill-timer penalty is due for a team.
+// referenceMs  — epoch ms when the 48h clock started (killTimerResetTime of last kill, or game start)
+// lastPenaltyMs — epoch ms of the most recent penalty applied, or null if never penalized
+// nowMs         — current epoch ms
+// repeatWindowMs — how long between successive penalties (always 24h per rules)
+export function isKillTimerPenaltyDue(
+  referenceMs: number,
+  lastPenaltyMs: number | null,
+  nowMs: number,
+  initialWindowMs: number,
+  repeatWindowMs: number
+): boolean {
+  if (nowMs - referenceMs < initialWindowMs) return false
+  return (
+    lastPenaltyMs === null ||
+    lastPenaltyMs < referenceMs ||
+    nowMs - lastPenaltyMs >= repeatWindowMs
+  )
+}
+
 // Golden gun off-hours: 10 PM–midnight EDT the gun is not a weapon.
 // Returns true if the gun may be used as a weapon at the given UTC time.
 export function isGoldenGunHours(now: Date): boolean {

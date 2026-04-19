@@ -5,8 +5,10 @@ import {
   nextStatusAfterFullDayMeals,
   isExposedPenaltyDue,
   killTimerResetTime,
+  isKillTimerPenaltyDue,
   isGoldenGunHours,
   eliminationPoints,
+  generateInviteCode,
   isKillValid,
   buildTargetChain,
   goldenGunExpiresAt,
@@ -103,6 +105,43 @@ describe('nextStatusAfterMissedCheckin', () => {
 })
 
 // ---------------------------------------------------------------------------
+// generateInviteCode
+// ---------------------------------------------------------------------------
+
+describe('generateInviteCode', () => {
+  const VALID_CHARS = new Set('ABCDEFGHJKLMNPQRSTUVWXYZ23456789')
+  const EXCLUDED_CHARS = ['O', '0', '1', 'I']
+
+  it('always produces a 6-character string', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(generateInviteCode()).toHaveLength(6)
+    }
+  })
+
+  it('only contains characters from the allowed set', () => {
+    for (let i = 0; i < 100; i++) {
+      for (const ch of generateInviteCode()) {
+        expect(VALID_CHARS.has(ch)).toBe(true)
+      }
+    }
+  })
+
+  it('never contains O, 0, 1, or I (visually ambiguous characters)', () => {
+    for (let i = 0; i < 100; i++) {
+      const code = generateInviteCode()
+      for (const excluded of EXCLUDED_CHARS) {
+        expect(code).not.toContain(excluded)
+      }
+    }
+  })
+
+  it('produces different codes across calls (not constant)', () => {
+    const codes = new Set(Array.from({ length: 50 }, () => generateInviteCode()))
+    expect(codes.size).toBeGreaterThan(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // eliminationPoints
 // ---------------------------------------------------------------------------
 
@@ -125,6 +164,27 @@ describe('isKillValid — assigned target', () => {
       valid: false,
       reason: expect.stringContaining('not your assigned target'),
     })
+  })
+
+  it('invalid: assignedTargetTeamId is null (no target assigned yet — pre-game or chain gap)', () => {
+    // null !== targetTeamId, so the assigned-target branch is skipped.
+    // Without a war or exposed/wanted status, the kill is invalid.
+    expect(isKillValid(baseCtx({ assignedTargetTeamId: null }))).toMatchObject({ valid: false })
+  })
+
+  it('valid: assignedTargetTeamId is null but target is exposed (open target rule still applies)', () => {
+    expect(isKillValid(baseCtx({
+      assignedTargetTeamId: null,
+      targetStatus: 'exposed',
+    }))).toEqual({ valid: true })
+  })
+
+  it('valid: assignedTargetTeamId is null but an active war permits the kill', () => {
+    const war = { team1_id: 'team-a', team2_id: 'team-b', status: 'active' as const }
+    expect(isKillValid(baseCtx({
+      assignedTargetTeamId: null,
+      activeWars: [war],
+    }))).toEqual({ valid: true })
   })
 })
 
@@ -302,6 +362,67 @@ describe('isKillValid — golden gun', () => {
       goldenGunHolderPlayerId: 'killer-1',
       assignedTargetTeamId: 'team-c',
     }))).toMatchObject({ valid: false })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// isKillValid — general amnesty
+// ---------------------------------------------------------------------------
+
+describe('isKillValid — general amnesty', () => {
+  it('blocks an otherwise-valid assigned-target kill', () => {
+    expect(isKillValid(baseCtx({ generalAmnestyActive: true }))).toEqual({
+      valid: false,
+      reason: expect.stringContaining('amnesty'),
+    })
+  })
+
+  it('blocks a rogue kill during amnesty', () => {
+    expect(isKillValid(baseCtx({ generalAmnestyActive: true, killerIsRogue: true }))).toMatchObject({ valid: false })
+  })
+
+  it('blocks a double-0 vs double-0 kill during amnesty', () => {
+    expect(isKillValid(baseCtx({
+      generalAmnestyActive: true,
+      killerIsDouble0: true,
+      targetIsDouble0: true,
+      assignedTargetTeamId: 'team-c',
+    }))).toMatchObject({ valid: false })
+  })
+
+  it('blocks a golden gun kill during amnesty', () => {
+    expect(isKillValid(baseCtx({
+      generalAmnestyActive: true,
+      goldenGunActive: true,
+      goldenGunHolderPlayerId: 'killer-1',
+      assignedTargetTeamId: 'team-c',
+    }))).toMatchObject({ valid: false })
+  })
+
+  it('blocks killing an exposed/wanted player during amnesty', () => {
+    expect(isKillValid(baseCtx({
+      generalAmnestyActive: true,
+      targetStatus: 'exposed',
+      assignedTargetTeamId: 'team-c',
+    }))).toMatchObject({ valid: false })
+  })
+
+  it('blocks a war kill during amnesty', () => {
+    const war = { team1_id: 'team-a', team2_id: 'team-b', status: 'active' as const }
+    expect(isKillValid(baseCtx({
+      generalAmnestyActive: true,
+      assignedTargetTeamId: 'team-c',
+      activeWars: [war],
+    }))).toMatchObject({ valid: false })
+  })
+
+  it('false amnesty flag preserves normal kill validity', () => {
+    expect(isKillValid(baseCtx({ generalAmnestyActive: false }))).toEqual({ valid: true })
+  })
+
+  it('undefined amnesty flag (omitted) preserves normal kill validity', () => {
+    // generalAmnestyActive is optional — omitting it should not break existing behavior
+    expect(isKillValid(baseCtx())).toEqual({ valid: true })
   })
 })
 
@@ -568,6 +689,71 @@ describe('isExposedPenaltyDue (rule 2b)', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Rule 2a — isKillTimerPenaltyDue (when should a team be penalized?)
+// ---------------------------------------------------------------------------
+
+describe('isKillTimerPenaltyDue (rule 2a)', () => {
+  const INITIAL = 48 * 60 * 60 * 1000  // 48h
+  const REPEAT  = 24 * 60 * 60 * 1000  // 24h
+
+  // reference = T+0, now = T+48h exactly
+  const REF = 1_000_000_000_000
+  const AT_THRESHOLD = REF + INITIAL
+
+  describe('initial 48h window — no penalty before it expires', () => {
+    it('not due at exactly 0ms after reference', () => {
+      expect(isKillTimerPenaltyDue(REF, null, REF, INITIAL, REPEAT)).toBe(false)
+    })
+
+    it('not due at 47h 59m 59s after reference', () => {
+      expect(isKillTimerPenaltyDue(REF, null, REF + INITIAL - 1000, INITIAL, REPEAT)).toBe(false)
+    })
+
+    it('due at exactly 48h after reference (never penalized)', () => {
+      expect(isKillTimerPenaltyDue(REF, null, AT_THRESHOLD, INITIAL, REPEAT)).toBe(true)
+    })
+
+    it('due at 72h after reference (never penalized)', () => {
+      expect(isKillTimerPenaltyDue(REF, null, REF + 72 * 60 * 60 * 1000, INITIAL, REPEAT)).toBe(true)
+    })
+  })
+
+  describe('successive 24h penalties after the initial one', () => {
+    // Penalty was applied right at the 48h threshold
+    const LAST_PENALTY = AT_THRESHOLD
+
+    it('not due again 1 second after last penalty', () => {
+      expect(isKillTimerPenaltyDue(REF, LAST_PENALTY, LAST_PENALTY + 1000, INITIAL, REPEAT)).toBe(false)
+    })
+
+    it('not due at 23h 59m 59s after last penalty', () => {
+      expect(isKillTimerPenaltyDue(REF, LAST_PENALTY, LAST_PENALTY + REPEAT - 1000, INITIAL, REPEAT)).toBe(false)
+    })
+
+    it('due again at exactly 24h after last penalty', () => {
+      expect(isKillTimerPenaltyDue(REF, LAST_PENALTY, LAST_PENALTY + REPEAT, INITIAL, REPEAT)).toBe(true)
+    })
+
+    it('due again at 36h after last penalty', () => {
+      expect(isKillTimerPenaltyDue(REF, LAST_PENALTY, LAST_PENALTY + 36 * 60 * 60 * 1000, INITIAL, REPEAT)).toBe(true)
+    })
+  })
+
+  describe('last penalty predates the reference (kill reset invalidates old penalty)', () => {
+    // Team was penalized, then made a kill — reference is now after the last penalty
+    const OLD_PENALTY = REF - 1000  // penalty was before the kill reset
+
+    it('due immediately after 48h window when last penalty is before reference', () => {
+      expect(isKillTimerPenaltyDue(REF, OLD_PENALTY, AT_THRESHOLD, INITIAL, REPEAT)).toBe(true)
+    })
+
+    it('not due before 48h window even if last penalty is before reference', () => {
+      expect(isKillTimerPenaltyDue(REF, OLD_PENALTY, REF + INITIAL - 1000, INITIAL, REPEAT)).toBe(false)
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Rule 2a — killTimerResetTime (resets at midnight FOLLOWING kill, not at kill time)
 // ---------------------------------------------------------------------------
 
@@ -707,31 +893,24 @@ describe('getMealWindow — published rules vs implementation', () => {
 // Flagged gaps — rules with no pure-function implementation yet
 // ---------------------------------------------------------------------------
 
-describe('rule gaps (no implementation — flagged for future work)', () => {
-  /**
-   * These tests document rules from the published ruleset that have no
-   * corresponding pure function in game-engine.ts. They serve as a
-   * reminder to implement before the game goes live.
-   */
-
-  it.todo('rule 2a bonus point: full team elimination awards +1 point (eliminationPoints only covers double-0)')
-  // The eliminationPoints() function returns 1 or 2 based on double-0 status.
-  // Rule XV says 1 bonus point is awarded for a full unit elimination.
-  // The elimination route doesn't add this bonus — it would need a third parameter.
-
-  it.todo('rule 2b: cron should promote Exposed → Wanted after 48h regardless of check-in status')
-  // isExposedPenaltyDue() is now implemented; the daily-checkin cron route needs to call it.
-
-  it.todo('rule 2a: kill timer cron should use killTimerResetTime() — not the raw kill timestamp — as the reference point')
-  // team-kills/route.ts uses last_elimination_at directly.
-  // Per rule 2a the 48h clock should start at midnight FOLLOWING the kill.
-
-  it.todo('Thursday Community Dinner: getMealWindow should return null on Thursdays 5–7:30 PM (amnesty, not a valid check-in window)')
-  // Current getMealWindow returns "dinner" for any day at 17:00–20:00.
-  // Community Dinners on Thursdays explicitly do not count toward the daily quota.
-
-  it.todo('golden gun: failure to return by 9:59 PM EDT should expose the entire holder team at midnight')
-  // goldenGunExpiresAt() correctly computes the deadline.
-  // No cron or background job currently enforces the team-wide Exposed penalty on missed return.
-})
+/**
+ * Intentional design decisions (not bugs, not todos):
+ *
+ * - kill_blackout_hours is always 48 for this game; INITIAL_WINDOW_MS hardcoded intentionally.
+ * - Thursday Community Dinner: accepted as a known gap; not worth the complexity for one game.
+ * - Weekend amnesty: handled manually by the admin via the general amnesty toggle button.
+ * - Golden gun missed-return penalty: low-probability edge case; admin will handle via direct
+ *   SQL if needed rather than automated enforcement.
+ *
+ * FIXED in main (2026-04-18):
+ *   ✓ rule 2a bonus point — +1 for full unit elimination awarded in eliminations/route.ts
+ *   ✓ rule 2b exposed 48h → Wanted — isExposedPenaltyDue() called in daily-checkin cron
+ *   ✓ rule 2a kill timer reference — killTimerResetTime() used in team-kills/route.ts
+ *   ✓ fragile kill-timer string matching — replaced with reason_code:'kill_timer_penalty'
+ *   ✓ golden gun holder terminated → gun retired in eliminations/route.ts
+ *   ✓ target chain: hunter team (not killer) now inherits via advance_target_chain action
+ *   ✓ terminated players blocked from check-ins in player/checkin/route.ts
+ *   ✓ general amnesty — isKillValid checks generalAmnestyActive; crons skip amnesty games
+ *   ✓ crypto shuffle — buildTargetChain uses crypto.getRandomValues()
+ */
 

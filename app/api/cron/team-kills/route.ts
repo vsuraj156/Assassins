@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/db'
 import { sendStatusChangeEmail } from '@/lib/email'
-import { killTimerResetTime } from '@/lib/game-engine'
+import { killTimerResetTime, isKillTimerPenaltyDue } from '@/lib/game-engine'
 import { repairTargetChainIfTeamEliminated } from '@/lib/target-chain'
 
 // Runs every hour via external scheduler
@@ -42,20 +42,13 @@ export async function GET(req: NextRequest) {
         ? new Date(game.start_time).getTime()
         : null
 
-      if (!referenceMs || now - referenceMs < INITIAL_WINDOW_MS) continue
+      if (!referenceMs) continue
 
-      // A penalty is due if: no penalty has been applied since the reference point,
-      // or the last penalty was applied more than 24h ago.
       const lastPenaltyMs = team.last_kill_penalty_at
         ? new Date(team.last_kill_penalty_at).getTime()
         : null
 
-      const penaltyDue =
-        lastPenaltyMs === null ||
-        lastPenaltyMs < referenceMs ||
-        now - lastPenaltyMs >= REPEAT_WINDOW_MS
-
-      if (!penaltyDue) continue
+      if (!isKillTimerPenaltyDue(referenceMs, lastPenaltyMs, now, INITIAL_WINDOW_MS, REPEAT_WINDOW_MS)) continue
 
       // Tiered selection: active → exposed → wanted
       const { data: teamPlayers } = await db
