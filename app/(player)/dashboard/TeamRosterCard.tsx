@@ -21,10 +21,12 @@ export default function TeamRosterCard({
   team: initialTeam,
   currentPlayerId,
   gameStatus,
+  inviteCode,
 }: {
   team: Team
   currentPlayerId?: string
   gameStatus?: string
+  inviteCode?: string
 }) {
   const [players, setPlayers] = useState<TeamPlayer[]>(initialTeam.players ?? [])
   const [loading, setLoading] = useState(false)
@@ -93,6 +95,14 @@ export default function TeamRosterCard({
             ? 'As captain, you can designate one teammate as the Double-0 agent.'
             : 'Double-0 designation is locked once the game starts.'}
         </p>
+      )}
+
+      {inviteCode && gameStatus === 'signup' && (
+        <div className="mt-4 pt-4 border-t border-zinc-800">
+          <p className="text-xs text-zinc-500 mb-1">Team Invite Code</p>
+          <p className="font-mono text-xl font-bold tracking-widest text-white">{inviteCode}</p>
+          <p className="text-xs text-zinc-600 mt-1">Share with teammates to join this team</p>
+        </div>
       )}
     </div>
   )

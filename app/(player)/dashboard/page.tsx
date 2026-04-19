@@ -42,7 +42,7 @@ export default async function PlayerDashboard() {
       .eq('stunned_by_id', session.user.playerId)
       .gt('expires_at', new Date().toISOString()),
     session.user.teamId
-      ? db.from('teams').select('*, captain_player_id, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single()
+      ? db.from('teams').select('*, captain_player_id, invite_code, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single()
       : Promise.resolve({ data: null, error: null }),
     session.user.gameId
       ? db.from('games').select('name, status, totem_description, kill_blackout_hours, general_amnesty_active, start_time').eq('id', session.user.gameId).single()
@@ -215,6 +215,7 @@ export default async function PlayerDashboard() {
           team={team.data}
           currentPlayerId={session.user.playerId}
           gameStatus={game?.data?.status ?? 'signup'}
+          inviteCode={(team.data as { invite_code?: string }).invite_code}
         />
       )}
 
