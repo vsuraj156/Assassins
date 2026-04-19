@@ -27,7 +27,7 @@ const teamStatusBg: Record<string, string> = {
 export default async function AdminLeaderboardPage() {
   const db = createServerClient()
 
-  const { data: games } = await db.from('games').select('id, name').eq('status', 'active').limit(1)
+  const { data: games } = await db.from('games').select('id, name').neq('status', 'ended').limit(1)
   const activeGame = games?.[0]
 
   if (!activeGame) return <div className="text-zinc-500">No active game.</div>
