@@ -14,6 +14,8 @@ export async function POST(req: NextRequest) {
   if (body.action === 'create') {
     const { game_id, team_name, player_name, code_name } = body
 
+    if (!code_name) return NextResponse.json({ error: 'Code name is required' }, { status: 400 })
+
     // Check game is in signup status
     const { data: game } = await db.from('games').select('status').eq('id', game_id).single()
     if (!game || game.status !== 'signup') {
@@ -77,6 +79,8 @@ export async function POST(req: NextRequest) {
 
   if (body.action === 'join') {
     const { invite_code, game_id, player_name, code_name } = body
+
+    if (!code_name) return NextResponse.json({ error: 'Code name is required' }, { status: 400 })
 
     // Find team by invite code
     const { data: team } = await db
