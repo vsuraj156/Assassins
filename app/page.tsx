@@ -65,6 +65,14 @@ export default async function LandingPage() {
         <p className="text-xs text-zinc-600">
           Harvard Google account required. Access restricted to registered players.
         </p>
+        <a
+          href="https://quincyassassins.wordpress.com/rules/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          View Game Rules →
+        </a>
       </div>
     </div>
   )
