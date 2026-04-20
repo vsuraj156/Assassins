@@ -7,7 +7,7 @@ export default async function LandingPage() {
   if (session?.user) {
     if (session.user.role === 'admin') redirect('/admin/dashboard')
     if (session.user.playerId) redirect('/dashboard')
-    redirect('/signup/create-team')
+    redirect('/signup/join-team')
   }
 
   return (

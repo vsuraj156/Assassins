@@ -15,7 +15,7 @@ const navItems = [
 export default async function PlayerLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session?.user) redirect('/')
-  if (!session.user.playerId) redirect('/signup/create-team')
+  if (!session.user.playerId) redirect('/signup/join-team')
 
   const showProfileSwitcher = session.user.email ? isMultiProfileEmail(session.user.email) : false
 
