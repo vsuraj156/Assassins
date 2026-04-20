@@ -177,23 +177,25 @@ export default async function PlayerDashboard() {
 
       {/* Quick actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Link
-          href="/checkin"
-          className={`rounded-xl border p-4 text-center transition-colors hover:bg-zinc-900 ${
-            todayCheckin?.status === 'approved' ? 'border-green-800 bg-green-950/20' :
-            todayCheckin?.status === 'pending'  ? 'border-yellow-800' :
-            'border-red-900 bg-red-950/20'
-          }`}
-        >
-          <div className="text-xs text-zinc-400 mb-1">Today's Check-in</div>
-          <div className={`text-sm font-semibold ${
-            todayCheckin?.status === 'approved' ? 'text-green-400' :
-            todayCheckin?.status === 'pending'  ? 'text-yellow-400' :
-            'text-red-400'
-          }`}>
-            {todayCheckin?.status ?? 'Not submitted'}
-          </div>
-        </Link>
+        {gameIsActive && (
+          <Link
+            href="/checkin"
+            className={`rounded-xl border p-4 text-center transition-colors hover:bg-zinc-900 ${
+              todayCheckin?.status === 'approved' ? 'border-green-800 bg-green-950/20' :
+              todayCheckin?.status === 'pending'  ? 'border-yellow-800' :
+              'border-red-900 bg-red-950/20'
+            }`}
+          >
+            <div className="text-xs text-zinc-400 mb-1">Today's Check-in</div>
+            <div className={`text-sm font-semibold ${
+              todayCheckin?.status === 'approved' ? 'text-green-400' :
+              todayCheckin?.status === 'pending'  ? 'text-yellow-400' :
+              'text-red-400'
+            }`}>
+              {todayCheckin?.status ?? 'Not submitted'}
+            </div>
+          </Link>
+        )}
 
         <Link href="/target" className="rounded-xl border border-zinc-800 p-4 text-center hover:bg-zinc-900 transition-colors">
           <div className="text-xs text-zinc-400 mb-1">My Target</div>
