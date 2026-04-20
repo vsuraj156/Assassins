@@ -1,6 +1,7 @@
 import { auth, signOut, isMultiProfileEmail } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 const navItems = [
   { href: '/dashboard', label: 'Status' },
@@ -24,7 +25,9 @@ export default async function PlayerLayout({ children }: { children: React.React
       <nav className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
         <div className="mx-auto max-w-4xl flex items-center justify-between">
           <div className="flex items-center gap-1 flex-wrap">
-            <Link href="/dashboard" className="text-red-500 font-bold text-sm mr-3">QA</Link>
+            <Link href="/dashboard" className="mr-3">
+              <Image src="/logo.png" alt="Quincy Assassins" width={32} height={32} className="rounded-full" />
+            </Link>
             {navItems.map((item) => (
               <Link
                 key={item.href}

@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { signOut } from '@/lib/auth'
+import Image from 'next/image'
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard' },
@@ -24,7 +25,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <nav className="border-b border-zinc-800 bg-zinc-950 px-4 py-3">
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-red-500 font-bold text-sm mr-3">ADMIN</span>
+            <Link href="/admin/dashboard" className="mr-3">
+              <Image src="/logo.png" alt="Quincy Assassins" width={32} height={32} className="rounded-full" />
+            </Link>
             {navItems.map((item) => (
               <Link
                 key={item.href}

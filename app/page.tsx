@@ -1,5 +1,6 @@
 import { auth, signIn } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import Image from 'next/image'
 
 export default async function LandingPage() {
   const session = await auth()
@@ -14,6 +15,9 @@ export default async function LandingPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-black px-4">
       <div className="w-full max-w-sm space-y-8 text-center">
         <div className="space-y-2">
+          <div className="flex justify-center mb-4">
+            <Image src="/logo.png" alt="Quincy Assassins" width={96} height={96} className="rounded-full" />
+          </div>
           <h1 className="text-5xl font-bold tracking-tight text-white">
             Quincy<br />
             <span className="text-red-500">Assassins</span>
