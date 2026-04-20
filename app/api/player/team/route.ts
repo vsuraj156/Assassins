@@ -158,5 +158,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
+  if (body.action === 'resubmit_code_name') {
+    const { code_name } = body
+    if (!code_name?.trim()) return NextResponse.json({ error: 'Code name is required' }, { status: 400 })
+    if (!session.user.gameId) return NextResponse.json({ error: 'No active game' }, { status: 400 })
+
+    const { data: player } = await db
+      .from('players')
+      .select('id, code_name_status')
+      .eq('user_email', session.user.email!)
+      .eq('game_id', session.user.gameId!)
+      .single()
+
+    if (!player) return NextResponse.json({ error: 'Player not found' }, { status: 404 })
+    if (player.code_name_status !== 'rejected') {
+      return NextResponse.json({ error: 'Code name is not in rejected state' }, { status: 400 })
+    }
+
+    await db.from('players').update({
+      code_name: code_name.trim(),
+      code_name_status: 'pending',
+      code_name_rejection_reason: null,
+    }).eq('id', player.id)
+
+    return NextResponse.json({ success: true })
+  }
+
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }

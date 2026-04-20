@@ -4,6 +4,7 @@ import { killTimerResetTime } from '@/lib/game-engine'
 import Link from 'next/link'
 import KillTimerCard from './KillTimerCard'
 import TeamRosterCard from './TeamRosterCard'
+import CodeNameResubmitBanner from './CodeNameResubmitBanner'
 
 export const dynamic = 'force-dynamic'
 
@@ -137,6 +138,11 @@ export default async function PlayerDashboard() {
         </div>
         <p className="text-sm mt-3 text-zinc-400">{statusMessage[player?.status ?? 'active']}</p>
       </div>
+
+      {/* Code name rejected banner */}
+      {player?.code_name_status === 'rejected' && (
+        <CodeNameResubmitBanner rejectionReason={player.code_name_rejection_reason ?? null} />
+      )}
 
       {/* Golden gun banner */}
       {goldenGun?.holder_player_id === session.user.playerId && (
