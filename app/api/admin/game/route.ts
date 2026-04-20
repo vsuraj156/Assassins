@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
 import { buildTargetChain, goldenGunExpiresAt } from '@/lib/game-engine'
-import { sendGoldenGunEmail, sendTargetUpdateEmail } from '@/lib/email'
+import { sendGameStartTargetEmail, sendGoldenGunEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await auth()
@@ -101,9 +101,10 @@ export async function POST(req: NextRequest) {
       const team = teamById.get(teamId)
       const targetTeam = teamById.get(targetId)
       if (!team || !targetTeam) continue
+      const targetPlayerNames = ((targetTeam.players ?? []) as { name: string }[]).map((p) => p.name)
       for (const player of (team.players ?? []) as { name: string; user_email: string | null }[]) {
         if (player.user_email) {
-          await sendTargetUpdateEmail(player.user_email, player.name, targetTeam.name)
+          await sendGameStartTargetEmail(player.user_email, player.name, targetTeam.name, targetPlayerNames)
         }
       }
     }

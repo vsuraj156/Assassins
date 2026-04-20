@@ -54,14 +54,42 @@ export async function sendStatusChangeEmail(
   })
 }
 
-export async function sendTargetUpdateEmail(to: string, playerName: string, targetTeamName: string) {
+export async function sendGameStartTargetEmail(
+  to: string,
+  playerName: string,
+  targetTeamName: string,
+  targetPlayerNames: string[]
+) {
+  const playerList = targetPlayerNames.map((n) => `<li>${n}</li>`).join('')
+  await send({
+    to,
+    subject: '[Quincy Assassins] Your First Target',
+    html: `
+      <h2>The Game Has Begun</h2>
+      <p>Dear ${playerName},</p>
+      <p>The Quincy Assassins game is now underway. Your team's first target is <strong>${targetTeamName}</strong>:</p>
+      <ul>${playerList}</ul>
+      <p><a href="${SITE_URL}/target">View your target details</a></p>
+      ${REPLY_LINE}
+    `,
+  })
+}
+
+export async function sendTargetUpdateEmail(
+  to: string,
+  playerName: string,
+  targetTeamName: string,
+  targetPlayerNames: string[]
+) {
+  const playerList = targetPlayerNames.map((n) => `<li>${n}</li>`).join('')
   await send({
     to,
     subject: '[Quincy Assassins] New Target Assigned',
     html: `
       <h2>New Target Assigned</h2>
       <p>Dear ${playerName},</p>
-      <p>Your team has been assigned a new target: <strong>${targetTeamName}</strong>.</p>
+      <p>Your team has been assigned a new target: <strong>${targetTeamName}</strong>:</p>
+      <ul>${playerList}</ul>
       <p><a href="${SITE_URL}/target">View your target details</a></p>
       ${REPLY_LINE}
     `,

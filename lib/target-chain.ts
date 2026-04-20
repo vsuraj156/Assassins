@@ -52,11 +52,12 @@ export async function repairTargetChainIfTeamEliminated(db: DB, teamId: string):
 
   if (!hunterTeam || hunterTeam.id === newTargetId) return
 
-  const { data: newTargetTeam } = await db.from('teams').select('name').eq('id', newTargetId).single()
+  const { data: newTargetTeam } = await db.from('teams').select('name, players(name)').eq('id', newTargetId).single()
 
   await db.from('teams').update({ target_team_id: newTargetId }).eq('id', hunterTeam.id)
 
   if (newTargetTeam) {
+    const targetPlayerNames = ((newTargetTeam.players ?? []) as { name: string }[]).map((p) => p.name)
     const { data: hunterPlayers } = await db
       .from('players')
       .select('name, user_email')
@@ -65,7 +66,7 @@ export async function repairTargetChainIfTeamEliminated(db: DB, teamId: string):
 
     for (const player of hunterPlayers ?? []) {
       if (player.user_email) {
-        await sendTargetUpdateEmail(player.user_email, player.name, newTargetTeam.name)
+        await sendTargetUpdateEmail(player.user_email, player.name, newTargetTeam.name, targetPlayerNames)
       }
     }
   }
