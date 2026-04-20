@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
-import { sendStatusChangeEmail } from '@/lib/email'
+import { sendStatusChangeEmail, sendRogueEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await auth()
@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest) {
   const { player_id, ...updates } = body
   const db = createServerClient()
 
-  const { data: oldPlayer } = await db.from('players').select('status, name, user_email').eq('id', player_id).single()
+  const { data: oldPlayer } = await db.from('players').select('status, name, user_email, is_rogue').eq('id', player_id).single()
 
   const { data, error } = await db.from('players').update(updates).eq('id', player_id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -84,6 +84,11 @@ export async function PATCH(req: NextRequest) {
       updates.status,
       updates.reason ?? 'Admin override'
     )
+  }
+
+  // Notify player when going rogue
+  if (updates.is_rogue === true && oldPlayer && !oldPlayer.is_rogue) {
+    await sendRogueEmail(oldPlayer.user_email, oldPlayer.name)
   }
 
   return NextResponse.json(data)

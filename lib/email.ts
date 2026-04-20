@@ -133,6 +133,26 @@ export async function sendGoldenGunEmail(to: string, playerName: string, expires
   })
 }
 
+export async function sendRogueEmail(to: string, playerName: string) {
+  await send({
+    to,
+    subject: '[Quincy Assassins] You Have Been Disavowed',
+    html: `
+      <h2>You Have Been Disavowed</h2>
+      <p>Dear ${playerName},</p>
+      <p>MI6 has disavowed you. You are now a <strong>Rogue Agent</strong>.</p>
+      <p>Effective immediately:</p>
+      <ul>
+        <li>You may eliminate <strong>any player</strong> in the game, including former teammates.</li>
+        <li>Any player in the game may eliminate <strong>you</strong>.</li>
+      </ul>
+      <p>Good luck. You'll need it.</p>
+      <p><a href="${SITE_URL}/target">View your targets</a></p>
+      ${REPLY_LINE}
+    `,
+  })
+}
+
 export async function sendPhotoRejectedEmail(to: string, playerName: string, reason: string) {
   await send({
     to,

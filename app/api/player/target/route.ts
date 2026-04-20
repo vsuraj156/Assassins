@@ -28,7 +28,7 @@ export async function GET() {
     { data: goldenGun },
   ] = await Promise.all([
     db.from('teams').select('target_team_id').eq('id', myTeamId).single(),
-    db.from('players').select('is_double_0').eq('id', myPlayerId).single(),
+    db.from('players').select('is_double_0, is_rogue').eq('id', myPlayerId).single(),
     db.from('wars').select('team1_id, team2_id').eq('game_id', myGameId).eq('status', 'active'),
     db.from('golden_gun_events')
       .select('holder_player_id')
@@ -37,6 +37,27 @@ export async function GET() {
       .gt('expires_at', now)
       .single(),
   ])
+
+  // Rogue agents can target anyone
+  if (currentPlayer?.is_rogue) {
+    const { data: allPlayers } = await db
+      .from('players')
+      .select('id, name, photo_url')
+      .eq('game_id', myGameId)
+      .not('status', 'eq', 'terminated')
+      .neq('id', myPlayerId)
+    return NextResponse.json({
+      isRogue: true,
+      target: { team: null, players: [] },
+      warTargets: [],
+      double0Targets: [],
+      rogueTargets: [],
+      openTargets: [],
+      holdsGoldenGun: false,
+      goldenGunTargets: [],
+      rogueAllTargets: allPlayers ?? [],
+    })
+  }
 
   const alreadyListed = new Set<string>()
 
@@ -89,14 +110,14 @@ export async function GET() {
     double0Targets.forEach((p) => alreadyListed.add(p.id))
   }
 
-  // 4. Rogue targets (any rogue player not on my team)
+  // 4. Rogue targets (any rogue player, including former teammates — rogues can be killed by anyone)
   const { data: rogueData } = await db
     .from('players')
     .select('id, name, photo_url')
     .eq('game_id', myGameId)
     .eq('is_rogue', true)
     .not('status', 'eq', 'terminated')
-    .not('team_id', 'eq', myTeamId)
+    .neq('id', myPlayerId)
   const rogueTargets = (rogueData ?? []).filter((p) => !alreadyListed.has(p.id))
   rogueTargets.forEach((p) => alreadyListed.add(p.id))
 

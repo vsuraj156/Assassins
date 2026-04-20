@@ -83,7 +83,7 @@ export default async function TargetPage() {
     { data: goldenGun },
   ] = await Promise.all([
     db.from('teams').select('target_team_id').eq('id', myTeamId).single(),
-    db.from('players').select('is_double_0').eq('id', myPlayerId).single(),
+    db.from('players').select('is_double_0, is_rogue').eq('id', myPlayerId).single(),
     db.from('wars').select('team1_id, team2_id').eq('game_id', myGameId).eq('status', 'active'),
     db.from('golden_gun_events')
       .select('holder_player_id')
@@ -92,6 +92,42 @@ export default async function TargetPage() {
       .gt('expires_at', now)
       .single(),
   ])
+
+  // Rogue agents can kill anyone — return special view
+  if (currentPlayer?.is_rogue) {
+    const { data: allPlayers } = await db
+      .from('players')
+      .select('id, name, photo_url, status')
+      .eq('game_id', myGameId)
+      .not('status', 'eq', 'terminated')
+      .neq('id', myPlayerId)
+
+    return (
+      <div className="space-y-8 max-w-2xl mx-auto">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Your Targets</h1>
+          <p className="text-zinc-400 text-sm mt-1">This page is only visible to you. Keep it confidential.</p>
+        </div>
+        <div className="rounded-xl border border-red-800 bg-red-950/20 p-4">
+          <p className="text-red-400 font-semibold text-sm">You are a Rogue Agent</p>
+          <p className="text-red-300/70 text-xs mt-1">You have been disavowed by MI6. Any player is a valid target — and any player can eliminate you.</p>
+        </div>
+        <section>
+          <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide mb-3">All Agents</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(allPlayers ?? []).map((player) => (
+              <SimplePlayerCard key={player.id} player={player} />
+            ))}
+          </div>
+        </section>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+          <p className="text-xs text-zinc-500">
+            To report a kill, go to <a href="/elimination" className="text-zinc-300 underline">Report Kill</a>.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   if (!myTeam?.target_team_id) {
     return (
@@ -156,7 +192,7 @@ export default async function TargetPage() {
     .eq('game_id', myGameId)
     .eq('is_rogue', true)
     .not('status', 'eq', 'terminated')
-    .not('team_id', 'eq', myTeamId)
+    .neq('id', myPlayerId)
   const rogueTargets = (rogueData ?? []).filter((p) => !alreadyListed.has(p.id)) as Player[]
   rogueTargets.forEach((p) => alreadyListed.add(p.id))
 
