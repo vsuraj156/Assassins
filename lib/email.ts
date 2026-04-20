@@ -133,6 +133,22 @@ export async function sendGoldenGunEmail(to: string, playerName: string, expires
   })
 }
 
+export async function sendPhotoRejectedEmail(to: string, playerName: string, reason: string) {
+  await send({
+    to,
+    subject: '[Quincy Assassins] Profile Photo Rejected',
+    html: `
+      <h2>Profile Photo Rejected</h2>
+      <p>Dear ${playerName},</p>
+      <p>Your profile photo has been rejected.</p>
+      <p>Reason: ${reason}</p>
+      <p>Please log in and upload a new photo.</p>
+      <p><a href="${SITE_URL}/dashboard">Go to your dashboard</a></p>
+      ${REPLY_LINE}
+    `,
+  })
+}
+
 export async function sendKillApprovedEmail(
   to: string,
   killerName: string,

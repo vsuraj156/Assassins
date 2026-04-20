@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
-import { sendNameRejectedEmail } from '@/lib/email'
+import { sendNameRejectedEmail, sendPhotoRejectedEmail } from '@/lib/email'
+import { deleteFile, playerPhotoPath } from '@/lib/storage'
 
 async function requireAdmin() {
   const session = await auth()
@@ -19,13 +20,15 @@ export async function GET(req: NextRequest) {
 
   let teamsQuery = db.from('teams').select('id, name, name_status, name_rejection_reason, captain_player_id').in('name_status', ['pending', 'rejected'])
   let playersQuery = db.from('players').select('id, code_name, code_name_status, code_name_rejection_reason, name, user_email').in('code_name_status', ['pending', 'rejected']).not('code_name', 'is', null)
+  let photosQuery = db.from('players').select('id, name, user_email, photo_url, photo_status').eq('photo_status', 'pending').not('photo_url', 'is', null)
   if (gameId) {
     teamsQuery = teamsQuery.eq('game_id', gameId)
     playersQuery = playersQuery.eq('game_id', gameId)
+    photosQuery = photosQuery.eq('game_id', gameId)
   }
-  const [{ data: teams }, { data: players }] = await Promise.all([teamsQuery, playersQuery])
+  const [{ data: teams }, { data: players }, { data: photos }] = await Promise.all([teamsQuery, playersQuery, photosQuery])
 
-  return NextResponse.json({ teams: teams ?? [], players: players ?? [] })
+  return NextResponse.json({ teams: teams ?? [], players: players ?? [], photos: photos ?? [] })
 }
 
 // POST /api/admin/moderation — approve or reject a name
@@ -66,6 +69,23 @@ export async function POST(req: NextRequest) {
 
     if (action === 'reject' && player) {
       await sendNameRejectedEmail(player.user_email, player.code_name ?? '', 'code name', reason)
+    }
+    return NextResponse.json({ success: true })
+  }
+
+  if (type === 'photo') {
+    const { data: player } = await db.from('players').select('user_email, name, photo_url').eq('id', id).single()
+    if (action === 'approve') {
+      await db.from('players').update({ photo_status: 'approved', photo_rejection_reason: null }).eq('id', id)
+    } else {
+      if (!reason?.trim()) return NextResponse.json({ error: 'Rejection reason required' }, { status: 400 })
+      await db.from('players').update({
+        photo_status: 'rejected',
+        photo_rejection_reason: reason,
+        photo_url: null,
+      }).eq('id', id)
+      try { await deleteFile(playerPhotoPath(id)) } catch { /* already gone */ }
+      if (player) await sendPhotoRejectedEmail(player.user_email, player.name, reason)
     }
     return NextResponse.json({ success: true })
   }

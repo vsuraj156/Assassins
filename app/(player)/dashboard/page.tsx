@@ -5,6 +5,7 @@ import Link from 'next/link'
 import KillTimerCard from './KillTimerCard'
 import TeamRosterCard from './TeamRosterCard'
 import CodeNameResubmitBanner from './CodeNameResubmitBanner'
+import PhotoResubmitBanner from './PhotoResubmitBanner'
 
 export const dynamic = 'force-dynamic'
 
@@ -138,6 +139,11 @@ export default async function PlayerDashboard() {
         </div>
         <p className="text-sm mt-3 text-zinc-400">{statusMessage[player?.status ?? 'active']}</p>
       </div>
+
+      {/* Photo rejected banner */}
+      {player?.photo_status === 'rejected' && (
+        <PhotoResubmitBanner rejectionReason={player.photo_rejection_reason ?? null} />
+      )}
 
       {/* Code name rejected banner */}
       {player?.code_name_status === 'rejected' && (

@@ -18,9 +18,17 @@ interface PendingPlayer {
   user_email: string
 }
 
+interface PendingPhoto {
+  id: string
+  name: string
+  user_email: string
+  photo_url: string
+}
+
 export default function ModerationPage() {
   const [teams, setTeams] = useState<PendingTeam[]>([])
   const [players, setPlayers] = useState<PendingPlayer[]>([])
+  const [photos, setPhotos] = useState<PendingPhoto[]>([])
   const [loading, setLoading] = useState(false)
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({})
 
@@ -31,9 +39,10 @@ export default function ModerationPage() {
     const data = await res.json()
     setTeams(data.teams ?? [])
     setPlayers(data.players ?? [])
+    setPhotos(data.photos ?? [])
   }
 
-  async function act(type: 'team_name' | 'code_name', id: string, action: 'approve' | 'reject') {
+  async function act(type: 'team_name' | 'code_name' | 'photo', id: string, action: 'approve' | 'reject') {
     const reason = rejectReason[id] ?? ''
     if (action === 'reject' && !reason.trim()) {
       alert('Please provide a rejection reason.')
@@ -49,12 +58,12 @@ export default function ModerationPage() {
     setLoading(false)
   }
 
-  const pendingCount = teams.filter(t => t.name_status === 'pending').length + players.filter(p => p.code_name_status === 'pending').length
+  const pendingCount = teams.filter(t => t.name_status === 'pending').length + players.filter(p => p.code_name_status === 'pending').length + photos.length
 
   return (
     <div className="space-y-8 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold text-white">Name Moderation</h1>
+        <h1 className="text-2xl font-bold text-white">Moderation</h1>
         {pendingCount > 0 && (
           <p className="text-sm text-yellow-400 mt-1">{pendingCount} pending approval{pendingCount > 1 ? 's' : ''}</p>
         )}
@@ -95,6 +104,46 @@ export default function ModerationPage() {
               </button>
               <button
                 onClick={() => act('team_name', team.id, 'reject')}
+                disabled={loading}
+                className="px-3 py-1.5 rounded bg-red-900 text-red-300 text-xs hover:bg-red-800 disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* Profile Photos */}
+      <section className="space-y-3">
+        <h2 className="font-semibold text-zinc-300">Profile Photos</h2>
+        {photos.length === 0 && <p className="text-zinc-500 text-sm">No photos to review.</p>}
+        {photos.map((photo) => (
+          <div key={photo.id} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-3">
+            <div className="flex gap-4 items-start">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photo.photo_url} alt={photo.name} className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
+              <div>
+                <div className="text-white font-semibold">{photo.name}</div>
+                <div className="text-xs text-zinc-500 mt-0.5">{photo.user_email}</div>
+              </div>
+            </div>
+            <div className="flex gap-2 items-start">
+              <input
+                className="flex-1 rounded bg-zinc-900 border border-zinc-700 px-2 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
+                placeholder="Rejection reason (required to reject)"
+                value={rejectReason[photo.id] ?? ''}
+                onChange={(e) => setRejectReason((r) => ({ ...r, [photo.id]: e.target.value }))}
+              />
+              <button
+                onClick={() => act('photo', photo.id, 'approve')}
+                disabled={loading}
+                className="px-3 py-1.5 rounded bg-green-800 text-green-300 text-xs hover:bg-green-700 disabled:opacity-50"
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => act('photo', photo.id, 'reject')}
                 disabled={loading}
                 className="px-3 py-1.5 rounded bg-red-900 text-red-300 text-xs hover:bg-red-800 disabled:opacity-50"
               >

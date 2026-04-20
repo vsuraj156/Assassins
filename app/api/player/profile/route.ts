@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     const { error } = await db
       .from('players')
-      .update({ photo_url })
+      .update({ photo_url, photo_status: 'pending', photo_rejection_reason: null })
       .eq('id', playerId)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
