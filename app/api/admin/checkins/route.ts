@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
 import { sendStatusChangeEmail, sendCheckinRejectedEmail } from '@/lib/email'
+import { deleteFile } from '@/lib/storage'
 
 async function requireAdmin() {
   const session = await auth()
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
   // Fetch checkin first so we have player_id and meal_date for recovery logic
   const { data: checkin } = await db
     .from('checkins')
-    .select('id, player_id, meal_date')
+    .select('id, player_id, meal_date, photo_url')
     .eq('id', checkin_id)
     .single()
 
@@ -66,6 +67,15 @@ export async function POST(req: NextRequest) {
     if (checkinPlayer) {
       await sendCheckinRejectedEmail(checkinPlayer.user_email, checkinPlayer.name)
     }
+  }
+
+  // On approval: delete photo from storage to save space
+  if (action === 'approve' && checkin.photo_url) {
+    try {
+      const path = checkin.photo_url.split('/storage/v1/object/public/assassins/')[1]
+      if (path) await deleteFile(path)
+    } catch { /* non-fatal */ }
+    await db.from('checkins').update({ photo_url: null }).eq('id', checkin_id)
   }
 
   // On approval: check if player now has one approved check-in in each meal window today.
