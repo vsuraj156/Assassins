@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
         team_id: team.id,
         user_email: session.user.email,
         name: player_name,
+        name_status: 'pending',
         role: 'player',
         status: 'active',
         is_double_0: true,
@@ -113,6 +114,7 @@ export async function POST(req: NextRequest) {
         team_id: team.id,
         user_email: session.user.email,
         name: player_name,
+        name_status: 'pending',
         role: 'player',
         status: 'active',
         code_name: code_name ?? null,
@@ -154,6 +156,56 @@ export async function POST(req: NextRequest) {
     // Clear existing Double-0 on the team, then set new one
     await db.from('players').update({ is_double_0: false }).eq('team_id', player.team_id)
     await db.from('players').update({ is_double_0: true }).eq('id', player_id)
+
+    return NextResponse.json({ success: true })
+  }
+
+  if (body.action === 'resubmit_team_name') {
+    const { team_name } = body
+    if (!team_name?.trim()) return NextResponse.json({ error: 'Team name is required' }, { status: 400 })
+    if (!session.user.gameId) return NextResponse.json({ error: 'No active game' }, { status: 400 })
+
+    const { data: sessionPlayer } = await db
+      .from('players')
+      .select('id, team_id')
+      .eq('user_email', session.user.email!)
+      .eq('game_id', session.user.gameId)
+      .single()
+    if (!sessionPlayer?.team_id) return NextResponse.json({ error: 'Player not found' }, { status: 404 })
+
+    const { data: team } = await db.from('teams').select('captain_player_id, name_status').eq('id', sessionPlayer.team_id).single()
+    if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
+    if (team.captain_player_id !== sessionPlayer.id) return NextResponse.json({ error: 'Only the captain can rename the team' }, { status: 403 })
+    if (team.name_status !== 'rejected') return NextResponse.json({ error: 'Team name is not in rejected state' }, { status: 400 })
+
+    await db.from('teams').update({
+      name: team_name.trim(),
+      name_status: 'pending',
+      name_rejection_reason: null,
+    }).eq('id', sessionPlayer.team_id)
+
+    return NextResponse.json({ success: true })
+  }
+
+  if (body.action === 'resubmit_player_name') {
+    const { player_name } = body
+    if (!player_name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    if (!session.user.gameId) return NextResponse.json({ error: 'No active game' }, { status: 400 })
+
+    const { data: player } = await db
+      .from('players')
+      .select('id, name_status')
+      .eq('user_email', session.user.email!)
+      .eq('game_id', session.user.gameId)
+      .single()
+    if (!player) return NextResponse.json({ error: 'Player not found' }, { status: 404 })
+    if (player.name_status !== 'rejected') return NextResponse.json({ error: 'Player name is not in rejected state' }, { status: 400 })
+
+    await db.from('players').update({
+      name: player_name.trim(),
+      name_status: 'pending',
+      name_rejection_reason: null,
+    }).eq('id', player.id)
 
     return NextResponse.json({ success: true })
   }

@@ -21,14 +21,16 @@ export async function GET(req: NextRequest) {
   let teamsQuery = db.from('teams').select('id, name, name_status, name_rejection_reason, captain_player_id').in('name_status', ['pending', 'rejected'])
   let playersQuery = db.from('players').select('id, code_name, code_name_status, code_name_rejection_reason, name, user_email').in('code_name_status', ['pending', 'rejected']).not('code_name', 'is', null)
   let photosQuery = db.from('players').select('id, name, user_email, photo_url, photo_status').eq('photo_status', 'pending').not('photo_url', 'is', null)
+  let playerNamesQuery = db.from('players').select('id, name, name_status, name_rejection_reason, user_email').in('name_status', ['pending', 'rejected'])
   if (gameId) {
     teamsQuery = teamsQuery.eq('game_id', gameId)
     playersQuery = playersQuery.eq('game_id', gameId)
     photosQuery = photosQuery.eq('game_id', gameId)
+    playerNamesQuery = playerNamesQuery.eq('game_id', gameId)
   }
-  const [{ data: teams }, { data: players }, { data: photos }] = await Promise.all([teamsQuery, playersQuery, photosQuery])
+  const [{ data: teams }, { data: players }, { data: photos }, { data: playerNames }] = await Promise.all([teamsQuery, playersQuery, photosQuery, playerNamesQuery])
 
-  return NextResponse.json({ teams: teams ?? [], players: players ?? [], photos: photos ?? [] })
+  return NextResponse.json({ teams: teams ?? [], players: players ?? [], photos: photos ?? [], playerNames: playerNames ?? [] })
 }
 
 // POST /api/admin/moderation — approve or reject a name
@@ -69,6 +71,19 @@ export async function POST(req: NextRequest) {
 
     if (action === 'reject' && player) {
       await sendNameRejectedEmail(player.user_email, player.code_name ?? '', 'code name', reason)
+    }
+    return NextResponse.json({ success: true })
+  }
+
+  if (type === 'player_name') {
+    const newStatus = action === 'approve' ? 'approved' : 'rejected'
+    const { data: player } = await db.from('players').select('user_email, name').eq('id', id).single()
+    await db.from('players').update({
+      name_status: newStatus,
+      name_rejection_reason: action === 'reject' ? reason : null,
+    }).eq('id', id)
+    if (action === 'reject' && player) {
+      await sendNameRejectedEmail(player.user_email, player.name, 'player name', reason)
     }
     return NextResponse.json({ success: true })
   }

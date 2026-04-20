@@ -71,7 +71,7 @@ export async function sendTargetUpdateEmail(to: string, playerName: string, targ
 export async function sendNameRejectedEmail(
   to: string,
   name: string,
-  type: 'team name' | 'code name',
+  type: 'team name' | 'code name' | 'player name',
   reason: string
 ) {
   await send({

@@ -25,10 +25,19 @@ interface PendingPhoto {
   photo_url: string
 }
 
+interface PendingPlayerName {
+  id: string
+  name: string
+  name_status: string
+  name_rejection_reason: string | null
+  user_email: string
+}
+
 export default function ModerationPage() {
   const [teams, setTeams] = useState<PendingTeam[]>([])
   const [players, setPlayers] = useState<PendingPlayer[]>([])
   const [photos, setPhotos] = useState<PendingPhoto[]>([])
+  const [playerNames, setPlayerNames] = useState<PendingPlayerName[]>([])
   const [loading, setLoading] = useState(false)
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({})
 
@@ -40,9 +49,10 @@ export default function ModerationPage() {
     setTeams(data.teams ?? [])
     setPlayers(data.players ?? [])
     setPhotos(data.photos ?? [])
+    setPlayerNames(data.playerNames ?? [])
   }
 
-  async function act(type: 'team_name' | 'code_name' | 'photo', id: string, action: 'approve' | 'reject') {
+  async function act(type: 'team_name' | 'code_name' | 'photo' | 'player_name', id: string, action: 'approve' | 'reject') {
     const reason = rejectReason[id] ?? ''
     if (action === 'reject' && !reason.trim()) {
       alert('Please provide a rejection reason.')
@@ -58,7 +68,7 @@ export default function ModerationPage() {
     setLoading(false)
   }
 
-  const pendingCount = teams.filter(t => t.name_status === 'pending').length + players.filter(p => p.code_name_status === 'pending').length + photos.length
+  const pendingCount = teams.filter(t => t.name_status === 'pending').length + players.filter(p => p.code_name_status === 'pending').length + photos.length + playerNames.filter(p => p.name_status === 'pending').length
 
   return (
     <div className="space-y-8 max-w-3xl">
@@ -104,6 +114,52 @@ export default function ModerationPage() {
               </button>
               <button
                 onClick={() => act('team_name', team.id, 'reject')}
+                disabled={loading}
+                className="px-3 py-1.5 rounded bg-red-900 text-red-300 text-xs hover:bg-red-800 disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* Player Names */}
+      <section className="space-y-3">
+        <h2 className="font-semibold text-zinc-300">Player Names</h2>
+        {playerNames.length === 0 && <p className="text-zinc-500 text-sm">No player names to review.</p>}
+        {playerNames.map((player) => (
+          <div key={player.id} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-white font-semibold text-lg">{player.name}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                player.name_status === 'pending' ? 'bg-yellow-900 text-yellow-300' :
+                player.name_status === 'approved' ? 'bg-green-900 text-green-300' :
+                'bg-red-900 text-red-300'
+              }`}>{player.name_status}</span>
+            </div>
+            <div className="text-xs text-zinc-500">{player.user_email}</div>
+
+            {player.name_status === 'rejected' && player.name_rejection_reason && (
+              <p className="text-xs text-red-400">Previous rejection: {player.name_rejection_reason}</p>
+            )}
+
+            <div className="flex gap-2 items-start">
+              <input
+                className="flex-1 rounded bg-zinc-900 border border-zinc-700 px-2 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none"
+                placeholder="Rejection reason (required to reject)"
+                value={rejectReason[player.id] ?? ''}
+                onChange={(e) => setRejectReason((r) => ({ ...r, [player.id]: e.target.value }))}
+              />
+              <button
+                onClick={() => act('player_name', player.id, 'approve')}
+                disabled={loading}
+                className="px-3 py-1.5 rounded bg-green-800 text-green-300 text-xs hover:bg-green-700 disabled:opacity-50"
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => act('player_name', player.id, 'reject')}
                 disabled={loading}
                 className="px-3 py-1.5 rounded bg-red-900 text-red-300 text-xs hover:bg-red-800 disabled:opacity-50"
               >

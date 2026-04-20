@@ -6,6 +6,8 @@ import KillTimerCard from './KillTimerCard'
 import TeamRosterCard from './TeamRosterCard'
 import CodeNameResubmitBanner from './CodeNameResubmitBanner'
 import PhotoResubmitBanner from './PhotoResubmitBanner'
+import TeamNameResubmitBanner from './TeamNameResubmitBanner'
+import PlayerNameResubmitBanner from './PlayerNameResubmitBanner'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,7 +46,7 @@ export default async function PlayerDashboard() {
       .eq('stunned_by_id', session.user.playerId)
       .gt('expires_at', new Date().toISOString()),
     session.user.teamId
-      ? db.from('teams').select('*, captain_player_id, invite_code, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single()
+      ? db.from('teams').select('*, captain_player_id, invite_code, name_status, name_rejection_reason, players!team_id(id, name, status, is_double_0)').eq('id', session.user.teamId).single()
       : Promise.resolve({ data: null, error: null }),
     session.user.gameId
       ? db.from('games').select('name, status, totem_description, kill_blackout_hours, general_amnesty_active, start_time').eq('id', session.user.gameId).single()
@@ -62,6 +64,7 @@ export default async function PlayerDashboard() {
     id: string; name: string; points: number; status: string
     target_team_id: string | null; last_elimination_at: string | null
     last_kill_penalty_at: string | null
+    name_status?: string; name_rejection_reason?: string | null
   } | null
 
   // Second batch — needs player/team data resolved first
@@ -139,6 +142,16 @@ export default async function PlayerDashboard() {
         </div>
         <p className="text-sm mt-3 text-zinc-400">{statusMessage[player?.status ?? 'active']}</p>
       </div>
+
+      {/* Team name rejected banner — captain only */}
+      {teamData?.name_status === 'rejected' && team?.data && (team.data as { captain_player_id?: string }).captain_player_id === session.user.playerId && (
+        <TeamNameResubmitBanner rejectionReason={teamData.name_rejection_reason ?? null} />
+      )}
+
+      {/* Player name rejected banner */}
+      {player?.name_status === 'rejected' && (
+        <PlayerNameResubmitBanner rejectionReason={player.name_rejection_reason ?? null} />
+      )}
 
       {/* Photo rejected banner */}
       {player?.photo_status === 'rejected' && (
