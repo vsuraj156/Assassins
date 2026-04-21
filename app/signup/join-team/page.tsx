@@ -81,7 +81,7 @@ export default function JoinTeamPage() {
           <label className="block text-sm text-zinc-300 mb-2">Game ID <span className="text-red-400">*</span></label>
           <input
             className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
-            placeholder="Ask your game admin for the Game ID"
+            placeholder="Check Qlubpenguin for the game ID from quincyassassins@gmail.com"
             value={gameId}
             onChange={(e) => setGameId(e.target.value)}
           />
