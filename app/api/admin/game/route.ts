@@ -58,6 +58,51 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data, { status: 201 })
   }
 
+  // action: preview_targets — generate a target chain for review without committing anything
+  if (body.action === 'preview_targets') {
+    const { game_id } = body
+
+    const { data: pendingTeams } = await db
+      .from('teams')
+      .select('id')
+      .eq('game_id', game_id)
+      .eq('name_status', 'pending')
+    const { data: pendingNames } = await db
+      .from('players')
+      .select('id')
+      .eq('game_id', game_id)
+      .eq('code_name_status', 'pending')
+
+    if ((pendingTeams?.length ?? 0) > 0 || (pendingNames?.length ?? 0) > 0) {
+      return NextResponse.json({ error: 'All team names and code names must be approved before starting' }, { status: 400 })
+    }
+
+    const { data: teamsWithDetails } = await db
+      .from('teams')
+      .select('id, name')
+      .eq('game_id', game_id)
+      .eq('status', 'active')
+
+    if (!teamsWithDetails || teamsWithDetails.length < 2) {
+      return NextResponse.json({ error: 'Need at least 2 active teams to start' }, { status: 400 })
+    }
+
+    const chain = buildTargetChain(teamsWithDetails.map((t) => t.id))
+    const teamById = new Map(teamsWithDetails.map((t) => [t.id, t]))
+
+    const assignments: { teamId: string; teamName: string; targetTeamId: string; targetTeamName: string }[] = []
+    for (const [teamId, targetId] of chain) {
+      assignments.push({
+        teamId,
+        teamName: teamById.get(teamId)?.name ?? teamId,
+        targetTeamId: targetId,
+        targetTeamName: teamById.get(targetId)?.name ?? targetId,
+      })
+    }
+
+    return NextResponse.json({ assignments })
+  }
+
   // action: start — assign target chain and activate
   if (body.action === 'start') {
     const { game_id } = body
@@ -78,20 +123,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'All team names and code names must be approved before starting' }, { status: 400 })
     }
 
-    // Build target chain
-    const { data: teams } = await db.from('teams').select('id').eq('game_id', game_id).eq('status', 'active')
-    if (!teams || teams.length < 2) {
-      return NextResponse.json({ error: 'Need at least 2 active teams to start' }, { status: 400 })
-    }
-
     const { data: teamsWithDetails } = await db
       .from('teams')
       .select('id, name, players(name, user_email)')
       .eq('game_id', game_id)
       .eq('status', 'active')
 
-    const chain = buildTargetChain((teamsWithDetails ?? []).map((t) => t.id))
-    const teamById = new Map((teamsWithDetails ?? []).map((t) => [t.id, t]))
+    if (!teamsWithDetails || teamsWithDetails.length < 2) {
+      return NextResponse.json({ error: 'Need at least 2 active teams to start' }, { status: 400 })
+    }
+
+    // Use pre-approved assignments from preview if provided, otherwise generate fresh
+    let chain: Map<string, string>
+    if (body.assignments && typeof body.assignments === 'object') {
+      chain = new Map(Object.entries(body.assignments as Record<string, string>))
+    } else {
+      chain = buildTargetChain(teamsWithDetails.map((t) => t.id))
+    }
+
+    const teamById = new Map(teamsWithDetails.map((t) => [t.id, t]))
 
     for (const [teamId, targetId] of chain) {
       await db.from('teams').update({ target_team_id: targetId }).eq('id', teamId)

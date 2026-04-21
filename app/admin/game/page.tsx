@@ -38,6 +38,13 @@ interface PlayerOption {
   team_id: string
 }
 
+interface TargetAssignment {
+  teamId: string
+  teamName: string
+  targetTeamId: string
+  targetTeamName: string
+}
+
 export default function GameControlPage() {
   const [games, setGames] = useState<Game[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -49,6 +56,8 @@ export default function GameControlPage() {
   const [currentGun, setCurrentGun] = useState<GoldenGunEvent | null>(null)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
+  const [previewAssignments, setPreviewAssignments] = useState<TargetAssignment[] | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   useEffect(() => { fetchGames() }, [])
   useEffect(() => {
@@ -101,6 +110,29 @@ export default function GameControlPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleStartGame(gameId: string) {
+    setPreviewLoading(true)
+    setMsg('')
+    try {
+      const res = await fetch('/api/admin/game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'preview_targets', game_id: gameId }),
+      })
+      const data = await res.json()
+      if (!res.ok) setMsg(`Error: ${data.error}`)
+      else setPreviewAssignments(data.assignments)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  async function confirmStartGame(gameId: string, assignments: TargetAssignment[]) {
+    setPreviewAssignments(null)
+    const assignmentsMap = Object.fromEntries(assignments.map((a) => [a.teamId, a.targetTeamId]))
+    await action({ action: 'start', game_id: gameId, assignments: assignmentsMap })
   }
 
   const currentGame = games.find((g) => g.id === activeGameId)
@@ -173,11 +205,11 @@ export default function GameControlPage() {
               )}
               {(currentGame.status === 'signup') && (
                 <button
-                  onClick={() => { if (confirm('Start the game? This will assign targets and lock membership.')) action({ action: 'start', game_id: currentGame.id }) }}
-                  disabled={loading}
+                  onClick={() => handleStartGame(currentGame.id)}
+                  disabled={loading || previewLoading}
                   className="px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50"
                 >
-                  Start Game (assign targets)
+                  {previewLoading ? 'Loading preview…' : 'Start Game (assign targets)'}
                 </button>
               )}
               {currentGame.status === 'active' && (
@@ -353,6 +385,46 @@ export default function GameControlPage() {
             </button>
           </section>
         </>
+      )}
+      {previewAssignments && currentGame && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-zinc-950 border border-zinc-700 rounded-xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl">
+            <div className="p-6 border-b border-zinc-800">
+              <h2 className="text-lg font-semibold text-white">Preview Target Assignments</h2>
+              <p className="text-sm text-zinc-400 mt-1">
+                Review the circular target chain before sending emails. Each team will be assigned the target shown.
+              </p>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              <ol className="space-y-2">
+                {previewAssignments.map((a, i) => (
+                  <li key={a.teamId} className="flex items-center gap-3 rounded-lg bg-zinc-900 px-4 py-3">
+                    <span className="text-xs text-zinc-500 w-5 text-right">{i + 1}</span>
+                    <span className="text-white font-medium flex-1">{a.teamName}</span>
+                    <span className="text-zinc-500 text-xs">targets</span>
+                    <span className="text-green-400 font-medium flex-1 text-right">{a.targetTeamName}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="p-6 border-t border-zinc-800 flex gap-3 justify-end">
+              <button
+                onClick={() => setPreviewAssignments(null)}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmStartGame(currentGame.id, previewAssignments)}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50"
+              >
+                {loading ? 'Starting…' : 'Confirm & Start Game'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
