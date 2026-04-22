@@ -23,6 +23,7 @@ export default function EliminationClient() {
   const [double0Targets, setDouble0Targets] = useState<Player[]>([])
   const [rogueTargets, setRogueTargets] = useState<Player[]>([])
   const [openTargets, setOpenTargets] = useState<Player[]>([])
+  const [amnestyActive, setAmnestyActive] = useState(false)
   const [holdsGoldenGun, setHoldsGoldenGun] = useState(false)
   const [goldenGunTargets, setGoldenGunTargets] = useState<Player[]>([])
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
@@ -40,6 +41,7 @@ export default function EliminationClient() {
   async function fetchTarget() {
     const res = await fetch('/api/player/target')
     const data = await res.json()
+    setAmnestyActive(data.amnestyActive ?? false)
     setTargetPlayers(data.target?.players ?? [])
     setWarTargets(data.warTargets ?? [])
     setDouble0Targets(data.double0Targets ?? [])
@@ -83,7 +85,12 @@ export default function EliminationClient() {
         <p className="text-zinc-400 text-sm mt-1">Submit your kill claim for admin review.</p>
       </div>
 
-      {success ? (
+      {amnestyActive ? (
+        <div className="rounded-xl border border-yellow-800 bg-yellow-950/20 p-6 text-center">
+          <p className="text-yellow-400 font-semibold text-lg">General Amnesty Active</p>
+          <p className="text-zinc-400 text-sm mt-1">No kills are permitted while amnesty is in effect.</p>
+        </div>
+      ) : success ? (
         <div className="rounded-xl border border-green-800 bg-green-950/20 p-6 text-center">
           <p className="text-green-400 font-semibold text-lg">Kill submitted!</p>
           <p className="text-zinc-400 text-sm mt-1">An admin will review and approve your claim.</p>
