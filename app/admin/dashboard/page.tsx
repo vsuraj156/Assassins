@@ -77,7 +77,7 @@ export default async function AdminDashboard() {
                     </span>
                   </td>
                   <td className="p-3 text-zinc-400">
-                    {game.start_time ? new Date(game.start_time).toLocaleDateString() : '—'}
+                    {game.start_time ? new Date(game.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' }) : '—'}
                   </td>
                 </tr>
               ))}
@@ -101,7 +101,7 @@ export default async function AdminDashboard() {
                   <td className="p-3 text-zinc-500">→</td>
                   <td className="p-3 text-white font-medium">{e.target?.name}</td>
                   <td className="p-3 text-zinc-500 text-xs">{e.killer_team?.name}</td>
-                  <td className="p-3 text-zinc-500 text-xs">{new Date(e.timestamp).toLocaleString()}</td>
+                  <td className="p-3 text-zinc-500 text-xs">{new Date(e.timestamp).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</td>
                 </tr>
               ))}
             </tbody>

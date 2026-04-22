@@ -57,7 +57,7 @@ export default async function KillLogPage() {
                 </div>
                 <div className="text-right">
                   <span className="text-white font-bold">+{e.points}</span>
-                  <div className="text-zinc-600 text-xs">{new Date(e.approved_at!).toLocaleDateString()}</div>
+                  <div className="text-zinc-600 text-xs">{new Date(e.approved_at!).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}</div>
                 </div>
               </div>
             </div>

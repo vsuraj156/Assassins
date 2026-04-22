@@ -130,12 +130,27 @@ export function goldenGunExpiresAt(releasedAt: Date): Date {
   return new Date(edtDate.getTime() + EDT_OFFSET_MS)
 }
 
-// Stun expires at midnight of the day it was applied
+// Returns midnight Eastern Time of the next ET calendar day after `date`.
+// Uses Intl to handle DST correctly (EDT = UTC-4, EST = UTC-5).
+function etMidnightAfter(date: Date): Date {
+  const tz = 'America/New_York'
+  const etDateStr = date.toLocaleDateString('en-CA', { timeZone: tz }) // "YYYY-MM-DD"
+  const base = new Date(etDateStr + 'T00:00:00Z')
+  const nextDayStr = new Date(base.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  for (const h of [4, 5]) {
+    const candidate = new Date(`${nextDayStr}T0${h}:00:00.000Z`)
+    const etHour = parseInt(
+      new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(candidate),
+      10,
+    )
+    if (etHour === 0) return candidate
+  }
+  return new Date(`${nextDayStr}T05:00:00.000Z`)
+}
+
+// Stun expires at midnight Eastern Time of the day it was applied
 export function stunExpiresAt(appliedAt: Date): Date {
-  const expires = new Date(appliedAt)
-  expires.setDate(expires.getDate() + 1)
-  expires.setHours(0, 0, 0, 0)
-  return expires
+  return etMidnightAfter(appliedAt)
 }
 
 // Rule 2c: attending all three meals in one day downgrades status by one level.
@@ -154,13 +169,9 @@ export function isExposedPenaltyDue(exposedSince: Date, now: Date): boolean {
   return now.getTime() - exposedSince.getTime() >= 48 * 60 * 60 * 1000
 }
 
-// Rule 2a: the kill timer resets at midnight LOCAL TIME following an approved kill,
-// not at the kill timestamp itself.
+// Rule 2a: the kill timer resets at midnight Eastern Time following an approved kill.
 export function killTimerResetTime(eliminationApprovedAt: Date): Date {
-  const midnight = new Date(eliminationApprovedAt)
-  midnight.setDate(midnight.getDate() + 1)
-  midnight.setHours(0, 0, 0, 0)
-  return midnight
+  return etMidnightAfter(eliminationApprovedAt)
 }
 
 // Rule 2a: whether a kill-timer penalty is due for a team.

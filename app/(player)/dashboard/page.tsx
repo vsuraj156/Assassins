@@ -252,7 +252,7 @@ export default async function PlayerDashboard() {
           <h3 className="text-sm font-semibold text-purple-300 mb-2">Active Stuns Applied by You</h3>
           {stuns?.map((stun) => (
             <div key={stun.id} className="text-xs text-zinc-400">
-              Expires: {new Date(stun.expires_at).toLocaleString()}
+              Expires: {new Date(stun.expires_at).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
             </div>
           ))}
         </div>
