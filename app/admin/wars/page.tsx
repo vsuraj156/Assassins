@@ -188,14 +188,9 @@ export default function AdminWarsPage() {
                 }`}>{war.status}</span>
 
                 {war.status === 'pending' && (
-                  <>
-                    <button onClick={() => act(war.id, 'approve')} disabled={loading} className="px-3 py-1 rounded bg-red-800 text-red-300 text-xs hover:bg-red-700 disabled:opacity-50">
-                      Approve War
-                    </button>
-                    <button onClick={() => act(war.id, 'reject')} disabled={loading} className="px-3 py-1 rounded bg-zinc-700 text-zinc-300 text-xs hover:bg-zinc-600 disabled:opacity-50">
-                      Reject
-                    </button>
-                  </>
+                  <button onClick={() => act(war.id, 'reject')} disabled={loading} className="px-3 py-1 rounded bg-zinc-700 text-zinc-300 text-xs hover:bg-zinc-600 disabled:opacity-50">
+                    Cancel
+                  </button>
                 )}
                 {war.status === 'active' && (
                   <button onClick={() => act(war.id, 'end')} disabled={loading} className="px-3 py-1 rounded bg-zinc-700 text-zinc-300 text-xs hover:bg-zinc-600 disabled:opacity-50">

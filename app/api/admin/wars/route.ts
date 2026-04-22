@@ -64,20 +64,13 @@ export async function POST(req: NextRequest) {
       game_id,
       team1_id,
       team2_id,
-      status: 'active',
+      status: 'pending',
       requested_by_player_id: adminPlayer.id,
       reason: reason || null,
-      approved_at: now,
     }).select().single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data, { status: 201 })
-  }
-
-  if (action === 'approve') {
-    const { error } = await db.from('wars').update({ status: 'active', approved_at: now }).eq('id', war_id)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ success: true })
   }
 
   if (action === 'end') {
