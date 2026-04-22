@@ -135,7 +135,7 @@ export default function CheckinClient() {
       </div>
 
       {/* Submission form — only shown during an active window that hasn't been used */}
-      {activeWindow && !checkinFor(activeWindow) && success !== activeWindow && (
+      {activeWindow && (!checkinFor(activeWindow) || checkinFor(activeWindow)?.status === 'rejected') && success !== activeWindow && (
         <div className="space-y-4">
           <p className="text-sm text-zinc-400">
             Submit your {activeWindow} check-in photo.
@@ -191,7 +191,7 @@ export default function CheckinClient() {
         </div>
       )}
 
-      {activeWindow && checkinFor(activeWindow) && (
+      {activeWindow && checkinFor(activeWindow) && checkinFor(activeWindow)?.status !== 'rejected' && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-center">
           <p className="text-zinc-400 text-sm capitalize">
             {activeWindow} check-in already submitted ({checkinFor(activeWindow)?.status}).
