@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createServerClient } from '@/lib/db'
-import { sendStatusChangeEmail, sendRogueEmail } from '@/lib/email'
+import { sendStatusChangeEmail, sendRogueEmail, sendTargetUpdateEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const session = await auth()
@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest) {
   const { player_id, ...updates } = body
   const db = createServerClient()
 
-  const { data: oldPlayer } = await db.from('players').select('status, name, user_email, is_rogue').eq('id', player_id).single()
+  const { data: oldPlayer } = await db.from('players').select('status, name, user_email, is_rogue, team_id').eq('id', player_id).single()
 
   const { data, error } = await db.from('players').update(updates).eq('id', player_id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -89,6 +89,70 @@ export async function PATCH(req: NextRequest) {
   // Notify player when going rogue
   if (updates.is_rogue === true && oldPlayer && !oldPlayer.is_rogue) {
     await sendRogueEmail(oldPlayer.user_email, oldPlayer.name)
+
+    // If this player was the last active member of their team, close the target chain.
+    // Rogue players are outside the chain — the team effectively dissolves from it.
+    if (oldPlayer.team_id) {
+      const { data: remaining } = await db
+        .from('players')
+        .select('id')
+        .eq('team_id', oldPlayer.team_id)
+        .neq('status', 'terminated')
+        .eq('is_rogue', false)
+        .neq('id', player_id)
+
+      if (!remaining || remaining.length === 0) {
+        const { data: rogueTeam } = await db
+          .from('teams')
+          .select('name, target_team_id, status')
+          .eq('id', oldPlayer.team_id)
+          .single()
+
+        const { data: hunterTeam } = await db
+          .from('teams')
+          .select('id')
+          .eq('target_team_id', oldPlayer.team_id)
+          .eq('status', 'active')
+          .single()
+
+        const newTargetId = rogueTeam?.target_team_id
+        if (rogueTeam?.status === 'active' && newTargetId && hunterTeam && newTargetId !== hunterTeam.id) {
+          const { data: newTargetTeam } = await db
+            .from('teams')
+            .select('name, players(name)')
+            .eq('id', newTargetId)
+            .single()
+
+          // Mark the now-empty team eliminated and close the chain
+          await db.from('teams').update({ status: 'eliminated' }).eq('id', oldPlayer.team_id)
+          await db.from('status_history').insert({
+            entity_type: 'team',
+            entity_id: oldPlayer.team_id,
+            old_status: 'active',
+            new_status: 'eliminated',
+            reason: 'Last member went rogue',
+            changed_by: session.user.playerId ?? null,
+          })
+
+          await db.from('teams').update({ target_team_id: newTargetId }).eq('id', hunterTeam.id)
+
+          const { data: hunterPlayers } = await db
+            .from('players')
+            .select('name, user_email')
+            .eq('team_id', hunterTeam.id)
+            .neq('status', 'terminated')
+
+          if (newTargetTeam) {
+            const targetPlayerNames = ((newTargetTeam.players ?? []) as { name: string }[]).map((p) => p.name)
+            for (const player of hunterPlayers ?? []) {
+              if (player.user_email) {
+                await sendTargetUpdateEmail(player.user_email, player.name, newTargetTeam.name, targetPlayerNames)
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   return NextResponse.json(data)
