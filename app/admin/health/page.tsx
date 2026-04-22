@@ -11,6 +11,7 @@ const TABS = [
   { id: 'kill-timer', label: 'Kill Timer' },
   { id: 'status', label: 'Status Distribution' },
   { id: 'chain', label: 'Target Chain' },
+  { id: 'checkins', label: 'Check-ins' },
 ]
 
 function computeNextPenaltyAt(referenceMs: number, lastPenaltyMs: number | null): number {
@@ -414,15 +415,180 @@ async function ChainTab() {
   )
 }
 
+// ─── Check-ins Tab ────────────────────────────────────────────────────────────
+
+const mealStatusColor: Record<string, string> = {
+  approved: 'text-green-400',
+  pending: 'text-yellow-400',
+  rejected: 'text-red-400',
+}
+
+const mealStatusLabel: Record<string, string> = {
+  approved: '✓',
+  pending: '…',
+  rejected: '✗',
+}
+
+async function CheckinsTab({ date }: { date: string }) {
+  const db = createServerClient()
+
+  const { data: games } = await db
+    .from('games')
+    .select('id')
+    .neq('status', 'ended')
+    .limit(1)
+
+  const activeGame = games?.[0]
+  if (!activeGame) return <p className="text-zinc-500">No active game.</p>
+
+  const [{ data: players }, { data: checkins }] = await Promise.all([
+    db
+      .from('players')
+      .select('id, name, status, teams!team_id(id, name)')
+      .eq('game_id', activeGame.id)
+      .order('name'),
+    db
+      .from('checkins')
+      .select('player_id, meal_time, status')
+      .eq('game_id', activeGame.id)
+      .eq('meal_date', date),
+  ])
+
+  if (!players?.length) return <p className="text-zinc-500">No players yet.</p>
+
+  type MealStatus = 'approved' | 'pending' | 'rejected' | null
+  type PlayerRow = {
+    id: string
+    name: string
+    playerStatus: string
+    teamName: string
+    breakfast: MealStatus
+    lunch: MealStatus
+    dinner: MealStatus
+  }
+
+  const checkinMap = new Map<string, Record<string, string>>()
+  for (const c of checkins ?? []) {
+    if (!checkinMap.has(c.player_id)) checkinMap.set(c.player_id, {})
+    checkinMap.get(c.player_id)![c.meal_time] = c.status
+  }
+
+  const rows: PlayerRow[] = players.map((p) => {
+    const meals = checkinMap.get(p.id) ?? {}
+    const team = Array.isArray(p.teams) ? p.teams[0] : p.teams
+    return {
+      id: p.id,
+      name: p.name,
+      playerStatus: p.status,
+      teamName: (team as { name: string } | null)?.name ?? '—',
+      breakfast: (meals['breakfast'] as MealStatus) ?? null,
+      lunch: (meals['lunch'] as MealStatus) ?? null,
+      dinner: (meals['dinner'] as MealStatus) ?? null,
+    }
+  })
+
+  // Sort: alive first, then by team name, then player name
+  rows.sort((a, b) => {
+    const aAlive = a.playerStatus !== 'terminated' ? 0 : 1
+    const bAlive = b.playerStatus !== 'terminated' ? 0 : 1
+    if (aAlive !== bAlive) return aAlive - bAlive
+    if (a.teamName !== b.teamName) return a.teamName.localeCompare(b.teamName)
+    return a.name.localeCompare(b.name)
+  })
+
+  const prevDate = new Date(date)
+  prevDate.setDate(prevDate.getDate() - 1)
+  const nextDate = new Date(date)
+  nextDate.setDate(nextDate.getDate() + 1)
+  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+
+  const totalApproved = rows.reduce(
+    (sum, r) => sum + [r.breakfast, r.lunch, r.dinner].filter((m) => m === 'approved').length,
+    0,
+  )
+  const totalPending = rows.reduce(
+    (sum, r) => sum + [r.breakfast, r.lunch, r.dinner].filter((m) => m === 'pending').length,
+    0,
+  )
+
+  function MealCell({ status }: { status: MealStatus }) {
+    if (!status) return <span className="text-zinc-700">—</span>
+    return (
+      <span className={`font-semibold ${mealStatusColor[status]}`}>
+        {mealStatusLabel[status]}
+      </span>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Date navigation */}
+      <div className="flex items-center gap-4">
+        <Link
+          href={`/admin/health?tab=checkins&date=${fmt(prevDate)}`}
+          className="px-3 py-1.5 rounded bg-zinc-800 text-zinc-400 text-sm hover:bg-zinc-700 hover:text-white transition-colors"
+        >
+          ← Prev
+        </Link>
+        <span className="text-white font-medium tabular-nums">{date}</span>
+        <Link
+          href={`/admin/health?tab=checkins&date=${fmt(nextDate)}`}
+          className="px-3 py-1.5 rounded bg-zinc-800 text-zinc-400 text-sm hover:bg-zinc-700 hover:text-white transition-colors"
+        >
+          Next →
+        </Link>
+        <span className="text-xs text-zinc-500 ml-2">
+          {totalApproved} approved · {totalPending} pending
+        </span>
+      </div>
+
+      <div className="rounded-xl border border-zinc-800 overflow-hidden overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-zinc-900 text-zinc-500 text-xs">
+              <th className="text-left px-4 py-3 font-medium">Player</th>
+              <th className="text-left px-4 py-3 font-medium">Team</th>
+              <th className="text-center px-4 py-3 font-medium">Breakfast</th>
+              <th className="text-center px-4 py-3 font-medium">Lunch</th>
+              <th className="text-center px-4 py-3 font-medium">Dinner</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.id}
+                className={`border-t border-zinc-800/50 ${row.playerStatus === 'terminated' ? 'opacity-40' : ''}`}
+              >
+                <td className="px-4 py-3 font-medium text-white">
+                  {row.name}
+                  {row.playerStatus === 'terminated' && (
+                    <span className="ml-2 text-xs text-red-500 font-normal">elim.</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-zinc-400">{row.teamName}</td>
+                <td className="px-4 py-3 text-center"><MealCell status={row.breakfast} /></td>
+                <td className="px-4 py-3 text-center"><MealCell status={row.lunch} /></td>
+                <td className="px-4 py-3 text-center"><MealCell status={row.dinner} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function HealthPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; date?: string }>
 }) {
-  const { tab: rawTab } = await searchParams
+  const { tab: rawTab, date: rawDate } = await searchParams
   const tab = TABS.some((t) => t.id === rawTab) ? rawTab! : 'kill-timer'
+  const today = new Date().toISOString().slice(0, 10)
+  const date = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : today
 
   return (
     <div className="space-y-6">
@@ -447,6 +613,7 @@ export default async function HealthPage({
       {tab === 'kill-timer' && <KillTimerTab />}
       {tab === 'status' && <StatusTab />}
       {tab === 'chain' && <ChainTab />}
+      {tab === 'checkins' && <CheckinsTab date={date} />}
     </div>
   )
 }
