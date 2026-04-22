@@ -66,24 +66,31 @@ export default function AdminEliminationsPage() {
   async function advanceTargetChain(dryRun: boolean) {
     if (!pendingCascade) return
     setLoading(true)
-    const res = await fetch('/api/admin/eliminations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'advance_target_chain',
-        eliminated_team_id: pendingCascade.eliminatedTeamId,
-        hunter_team_id: pendingCascade.hunterTeamId,
-        killer_team_id: pendingCascade.killerTeamId,
-        dry_run: dryRun,
-      }),
-    })
-    const data = await res.json()
-    if (dryRun) {
-      alert(`Dry run:\n- Eliminated team: ${data.eliminatedTeamName}\n- New target: ${data.newTargetTeamName}\n- Players to notify: ${data.playersToNotify.map((p: { name: string; email: string }) => `${p.name} (${p.email})`).join(', ')}`)
-    } else {
-      setPendingCascade(null)
+    try {
+      const res = await fetch('/api/admin/eliminations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'advance_target_chain',
+          eliminated_team_id: pendingCascade.eliminatedTeamId,
+          hunter_team_id: pendingCascade.hunterTeamId,
+          killer_team_id: pendingCascade.killerTeamId,
+          dry_run: dryRun,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Request failed')
+      if (dryRun) {
+        const notify = (data.playersToNotify ?? []).map((p: { name: string; email: string }) => `${p.name} (${p.email})`).join(', ')
+        alert(`Dry run:\n- Eliminated team: ${data.eliminatedTeamName}\n- New target: ${data.newTargetTeamName}\n- Players to notify: ${notify}`)
+      } else {
+        setPendingCascade(null)
+      }
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (

@@ -42,21 +42,21 @@ export async function POST(req: NextRequest) {
   const { elimination_id, action, reason } = body
   const db = createServerClient()
 
-  const { data: elim } = await db
-    .from('eliminations')
-    .select(`
-      *,
-      killer:players!killer_id(id, name, user_email),
-      target:players!target_id(id, name, user_email, status),
-      killer_team:teams!killer_team_id(id, points),
-      target_team:teams!target_team_id(id)
-    `)
-    .eq('id', elimination_id)
-    .single()
-
-  if (!elim) return NextResponse.json({ error: 'Elimination not found' }, { status: 404 })
-
   if (action === 'approve') {
+    const { data: elim } = await db
+      .from('eliminations')
+      .select(`
+        *,
+        killer:players!killer_id(id, name, user_email),
+        target:players!target_id(id, name, user_email, status),
+        killer_team:teams!killer_team_id(id, points),
+        target_team:teams!target_team_id(id)
+      `)
+      .eq('id', elimination_id)
+      .single()
+
+    if (!elim) return NextResponse.json({ error: 'Elimination not found' }, { status: 404 })
+
     const now = new Date().toISOString()
 
     // Update elimination status
