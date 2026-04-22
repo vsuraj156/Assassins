@@ -123,14 +123,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'All team names and code names must be approved before starting' }, { status: 400 })
     }
 
-    const { data: teamsWithDetails } = await db
+    const { data: teamsWithDetails, error: teamsError } = await db
       .from('teams')
-      .select('id, name, players(name, user_email)')
+      .select('id, name')
       .eq('game_id', game_id)
       .eq('status', 'active')
 
+    if (teamsError) return NextResponse.json({ error: teamsError.message }, { status: 500 })
     if (!teamsWithDetails || teamsWithDetails.length < 2) {
       return NextResponse.json({ error: 'Need at least 2 active teams to start' }, { status: 400 })
+    }
+
+    const { data: allPlayers } = await db
+      .from('players')
+      .select('name, user_email, team_id')
+      .eq('game_id', game_id)
+      .neq('status', 'terminated')
+
+    const playersByTeam = new Map<string, { name: string; user_email: string | null }[]>()
+    for (const p of allPlayers ?? []) {
+      if (!p.team_id) continue
+      if (!playersByTeam.has(p.team_id)) playersByTeam.set(p.team_id, [])
+      playersByTeam.get(p.team_id)!.push({ name: p.name, user_email: p.user_email })
     }
 
     // Use pre-approved assignments from preview if provided, otherwise generate fresh
@@ -151,8 +165,8 @@ export async function POST(req: NextRequest) {
       const team = teamById.get(teamId)
       const targetTeam = teamById.get(targetId)
       if (!team || !targetTeam) continue
-      const targetPlayerNames = ((targetTeam.players ?? []) as { name: string }[]).map((p) => p.name)
-      for (const player of (team.players ?? []) as { name: string; user_email: string | null }[]) {
+      const targetPlayerNames = (playersByTeam.get(targetId) ?? []).map((p) => p.name)
+      for (const player of playersByTeam.get(teamId) ?? []) {
         if (player.user_email) {
           await sendGameStartTargetEmail(player.user_email, player.name, targetTeam.name, targetPlayerNames)
         }
