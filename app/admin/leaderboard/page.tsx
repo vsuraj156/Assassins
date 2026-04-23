@@ -148,7 +148,7 @@ export default async function AdminLeaderboardPage() {
                   </td>
 
                   <td className={`px-3 py-1.5 text-xs font-medium uppercase ${statusColor[player.status] ?? 'text-zinc-400'}`}>
-                    {player.is_rogue ? 'rogue' : player.status}
+                    {player.status}
                   </td>
 
                   {pi === 0 ? (
