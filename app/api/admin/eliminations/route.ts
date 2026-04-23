@@ -194,7 +194,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No valid target to advance to' }, { status: 400 })
     }
 
-    const { data: newTargetTeam } = await db.from('teams').select('name, players(name)').eq('id', newTargetId).single()
+    const { data: newTargetTeam } = await db.from('teams').select('name').eq('id', newTargetId).single()
+    const { data: newTargetPlayers } = await db
+      .from('players')
+      .select('name')
+      .eq('team_id', newTargetId)
+      .neq('status', 'terminated')
     const { data: hunterTeamPlayers } = await db
       .from('players')
       .select('name, user_email')
@@ -226,7 +231,7 @@ export async function POST(req: NextRequest) {
     await db.from('teams').update({ target_team_id: newTargetId }).eq('id', hunter_team_id)
 
     if (newTargetTeam) {
-      const targetPlayerNames = ((newTargetTeam.players ?? []) as { name: string }[]).map((p) => p.name)
+      const targetPlayerNames = (newTargetPlayers ?? []).map((p) => p.name)
       for (const player of hunterTeamPlayers ?? []) {
         if (player.user_email) {
           await sendTargetUpdateEmail(player.user_email, player.name, newTargetTeam.name, targetPlayerNames)
