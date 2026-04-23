@@ -45,6 +45,7 @@ async function runCheckinCron() {
       .from('players')
       .select('id, status, name, user_email, team_id')
       .eq('game_id', game.id)
+      .eq('role', 'player')
       .in('status', ['active', 'exposed', 'wanted'])
 
     if (!players) continue
