@@ -181,6 +181,25 @@ export async function sendRogueEmail(to: string, playerName: string) {
   })
 }
 
+export async function sendWarActivatedEmail(
+  to: string,
+  playerName: string,
+  enemyTeamName: string,
+) {
+  await send({
+    to,
+    subject: '[Quincy Assassins] War Declared',
+    html: `
+      <h2>War Declared</h2>
+      <p>Dear ${playerName},</p>
+      <p>MI6 has approved a declaration of war between your unit and <strong>${enemyTeamName}</strong>, effective immediately.</p>
+      <p>Members of both units may now terminate each other on sight.</p>
+      <p><a href="${SITE_URL}/dashboard">View your dashboard</a></p>
+      ${REPLY_LINE}
+    `,
+  })
+}
+
 export async function sendPhotoRejectedEmail(to: string, playerName: string, reason: string) {
   await send({
     to,
