@@ -12,6 +12,7 @@ CREATE TABLE games (
   totem_description TEXT,
   general_amnesty_active BOOLEAN NOT NULL DEFAULT FALSE,
   amnesty_started_at TIMESTAMPTZ,
+  amnesty_pauses_kill_timers BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -154,3 +155,6 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS amnesty_started_at TIMESTAMPTZ;
 
 -- Migration: add reason_code to status_history for structured event discrimination
 ALTER TABLE status_history ADD COLUMN IF NOT EXISTS reason_code TEXT;
+
+-- Migration: add amnesty_pauses_kill_timers to games
+ALTER TABLE games ADD COLUMN IF NOT EXISTS amnesty_pauses_kill_timers BOOLEAN NOT NULL DEFAULT TRUE;

@@ -10,6 +10,7 @@ interface Game {
   kill_blackout_hours: number
   totem_description: string | null
   general_amnesty_active: boolean
+  amnesty_pauses_kill_timers: boolean
 }
 
 interface Team {
@@ -59,6 +60,7 @@ export default function GameControlPage() {
   const [msg, setMsg] = useState('')
   const [previewAssignments, setPreviewAssignments] = useState<TargetAssignment[] | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [amnestyPausesKillTimers, setAmnestyPausesKillTimers] = useState(true)
 
   useEffect(() => { fetchGames() }, [])
   useEffect(() => {
@@ -284,16 +286,27 @@ export default function GameControlPage() {
                 <h2 className="font-semibold text-white">General Amnesty</h2>
                 <p className="text-xs text-zinc-400 mt-1">
                   {currentGame.general_amnesty_active
-                    ? 'Amnesty is active. All kills are blocked and cron penalties are paused. Kill timers will be shifted forward when you end amnesty.'
+                    ? `Amnesty is active. All kills are blocked and cron penalties are paused. Kill timers will ${currentGame.amnesty_pauses_kill_timers ? 'be shifted forward' : 'not be changed'} when you end amnesty.`
                     : 'Start amnesty to pause all kills and cron penalties game-wide.'}
                 </p>
               </div>
+              {!currentGame.general_amnesty_active && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={amnestyPausesKillTimers}
+                    onChange={(e) => setAmnestyPausesKillTimers(e.target.checked)}
+                    className="rounded border-zinc-600 bg-zinc-900 text-blue-500 focus:ring-0"
+                  />
+                  <span className="text-sm text-zinc-300">Pause kill timers (shift deadlines forward when amnesty ends)</span>
+                </label>
+              )}
               <button
                 onClick={() => {
                   const msg = currentGame.general_amnesty_active
-                    ? 'End general amnesty? Kill timers will be shifted to account for the pause.'
-                    : 'Start general amnesty? All kills will be blocked until you end it.'
-                  if (confirm(msg)) action({ action: 'toggle_amnesty', game_id: currentGame.id })
+                    ? `End general amnesty? Kill timers will ${currentGame.amnesty_pauses_kill_timers ? 'be shifted forward to account for the pause' : 'not be changed'}.`
+                    : `Start general amnesty? All kills will be blocked until you end it. Kill timers will ${amnestyPausesKillTimers ? 'be paused' : 'keep running'}.`
+                  if (confirm(msg)) action({ action: 'toggle_amnesty', game_id: currentGame.id, pause_kill_timers: amnestyPausesKillTimers })
                 }}
                 disabled={loading}
                 className={`px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors ${

@@ -255,31 +255,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
-  // action: toggle_amnesty — start or end general amnesty, shifting kill timers on end
+  // action: toggle_amnesty — start or end general amnesty, optionally shifting kill timers on end
   if (body.action === 'toggle_amnesty') {
     const { game_id } = body
     const { data: game } = await db
       .from('games')
-      .select('general_amnesty_active, amnesty_started_at, start_time')
+      .select('general_amnesty_active, amnesty_started_at, amnesty_pauses_kill_timers, start_time')
       .eq('id', game_id)
       .single()
     if (!game) return NextResponse.json({ error: 'Game not found' }, { status: 404 })
 
     if (!game.general_amnesty_active) {
+      const pauseKillTimers = body.pause_kill_timers !== false
       await db
         .from('games')
-        .update({ general_amnesty_active: true, amnesty_started_at: new Date().toISOString() })
+        .update({
+          general_amnesty_active: true,
+          amnesty_started_at: new Date().toISOString(),
+          amnesty_pauses_kill_timers: pauseKillTimers,
+        })
         .eq('id', game_id)
       return NextResponse.json({ success: true, amnesty: true })
     }
 
-    // Ending amnesty: shift all team kill timers forward by the amnesty duration
+    // Ending amnesty: shift kill timers only if this amnesty was configured to pause them
     const now = new Date()
     const durationMs = game.amnesty_started_at
       ? now.getTime() - new Date(game.amnesty_started_at).getTime()
       : 0
 
-    if (durationMs > 0) {
+    if (game.amnesty_pauses_kill_timers && durationMs > 0) {
       const { data: teams } = await db
         .from('teams')
         .select('id, last_elimination_at, last_kill_penalty_at')
@@ -304,7 +309,7 @@ export async function POST(req: NextRequest) {
       general_amnesty_active: false,
       amnesty_started_at: null,
     }
-    if (game.start_time && durationMs > 0) {
+    if (game.amnesty_pauses_kill_timers && game.start_time && durationMs > 0) {
       gameUpdates.start_time = new Date(new Date(game.start_time).getTime() + durationMs).toISOString()
     }
     await db.from('games').update(gameUpdates).eq('id', game_id)
