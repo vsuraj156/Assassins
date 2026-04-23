@@ -36,6 +36,7 @@ interface PlayerOption {
   id: string
   name: string
   team_id: string
+  status: string
 }
 
 interface TargetAssignment {
