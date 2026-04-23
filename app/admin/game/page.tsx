@@ -346,7 +346,7 @@ export default function GameControlPage() {
                       {teams.filter(t => t.status === 'active').map((team) => (
                         <optgroup key={team.id} label={team.name}>
                           {players
-                            .filter(p => p.team_id === team.id)
+                            .filter(p => p.team_id === team.id && p.status !== 'terminated')
                             .map(p => (
                               <option key={p.id} value={p.id}>{p.name}</option>
                             ))}
