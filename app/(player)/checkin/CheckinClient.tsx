@@ -140,6 +140,9 @@ export default function CheckinClient() {
           <p className="text-sm text-zinc-400">
             Submit your {activeWindow} check-in photo.
           </p>
+          <p className="text-xs text-zinc-500">
+            Your photo must be taken while the dining hall is open. The 30-minute window after closing is only to give you time to submit — photos taken after the dining hall closes will be rejected.
+          </p>
           <div
             className="rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-950 p-8 text-center cursor-pointer hover:border-zinc-500 transition-colors"
             onClick={() => document.getElementById('photo-input')?.click()}
