@@ -588,7 +588,7 @@ export default async function HealthPage({
 }) {
   const { tab: rawTab, date: rawDate } = await searchParams
   const tab = TABS.some((t) => t.id === rawTab) ? rawTab! : 'kill-timer'
-  const today = new Date().toISOString().slice(0, 10)
+  const today = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const date = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : today
 
   return (
