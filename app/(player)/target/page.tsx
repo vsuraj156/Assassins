@@ -149,9 +149,12 @@ export default async function TargetPage() {
   ])
   ;(targetPlayers ?? []).forEach((p) => alreadyListed.add(p.id))
 
-  // 2. War targets
+  // 2. War targets — only wars where my team is a participant
+  const myWars = (wars ?? []).filter(
+    (w) => w.team1_id === myTeamId || w.team2_id === myTeamId,
+  )
   const warTeamIds = [...new Set(
-    (wars ?? [])
+    myWars
       .flatMap((w) => [w.team1_id, w.team2_id])
       .filter((id) => id !== myTeamId && id !== myTeam.target_team_id),
   )]
