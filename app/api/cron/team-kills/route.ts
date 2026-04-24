@@ -48,6 +48,7 @@ async function runKillTimerCron() {
         .select('id, name, user_email, status')
         .eq('team_id', team.id)
         .eq('role', 'player')
+        .eq('is_rogue', false)
         .in('status', ['active', 'exposed', 'wanted'])
 
       if (!teamPlayers || teamPlayers.length === 0) continue
