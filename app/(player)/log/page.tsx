@@ -10,14 +10,17 @@ export default async function KillLogPage() {
   const gameId = session?.user?.gameId
   if (!gameId) return <div className="text-zinc-500">No active game.</div>
 
-  // Get game's blackout hours
-  const { data: game } = await db.from('games').select('kill_blackout_hours').eq('id', gameId).single()
+  // Get game's blackout hours and start time
+  const { data: game } = await db.from('games').select('kill_blackout_hours, start_time').eq('id', gameId).single()
   const blackoutHours = game?.kill_blackout_hours ?? 48
 
-  // Only show kills approved more than blackout_hours ago
-  const cutoff = new Date(Date.now() - blackoutHours * 60 * 60 * 1000).toISOString()
+  // Blackout lifts blackoutHours after game start
+  const blackoutEndsAt = game?.start_time
+    ? new Date(new Date(game.start_time).getTime() + blackoutHours * 60 * 60 * 1000)
+    : null
+  const blackoutActive = blackoutEndsAt ? Date.now() < blackoutEndsAt.getTime() : false
 
-  const { data: eliminations } = await db
+  const { data: eliminations } = blackoutActive ? { data: [] } : await db
     .from('eliminations')
     .select(`
       id, points, is_double_0, approved_at, timestamp,
@@ -28,7 +31,6 @@ export default async function KillLogPage() {
     `)
     .eq('game_id', gameId)
     .eq('status', 'approved')
-    .lt('approved_at', cutoff)
     .order('approved_at', { ascending: false })
 
   return (
@@ -36,7 +38,9 @@ export default async function KillLogPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Kill Log</h1>
         <p className="text-zinc-500 text-sm mt-1">
-          Kills are hidden for {blackoutHours} hours after confirmation.
+          {blackoutActive && blackoutEndsAt
+            ? `Kill log unlocks ${blackoutEndsAt.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.`
+            : `Kills are hidden for the first ${blackoutHours} hours of the game.`}
         </p>
       </div>
 
