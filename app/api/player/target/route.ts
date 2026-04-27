@@ -83,8 +83,9 @@ export async function GET() {
   // 2. War targets (teams at war with us, excluding assigned target)
   const warTeamIds = [...new Set(
     (wars ?? [])
-      .flatMap((w) => [w.team1_id, w.team2_id])
-      .filter((id) => id !== myTeamId && id !== myTeam?.target_team_id),
+      .filter((w) => w.team1_id === myTeamId || w.team2_id === myTeamId)
+      .map((w) => w.team1_id === myTeamId ? w.team2_id : w.team1_id)
+      .filter((id) => id !== myTeam?.target_team_id),
   )]
 
   const warTargets: { teamName: string; players: { id: string; name: string; photo_url: string | null }[] }[] = []
