@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
       .select('id')
       .eq('team_id', elim.target_team_id)
       .not('status', 'eq', 'terminated')
+      .eq('is_rogue', false)
 
     let teamEliminatedPayload: { teamEliminated: true; eliminatedTeamId: string; eliminatedTeamName: string; newTargetTeamId: string; newTargetTeamName: string; hunterTeamId: string; killerTeamId: string } | null = null
 
