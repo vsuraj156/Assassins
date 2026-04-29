@@ -57,8 +57,8 @@ export default async function AdminLeaderboardPage() {
   const teamsRemaining = teams.filter((t) => t.status === 'active').length
   const counts = {
     active: allPlayers.filter((p) => p.status === 'active' && !p.is_rogue).length,
-    exposed: allPlayers.filter((p) => p.status === 'exposed').length,
-    wanted: allPlayers.filter((p) => p.status === 'wanted').length,
+    exposed: allPlayers.filter((p) => p.status === 'exposed' && !p.is_rogue).length,
+    wanted: allPlayers.filter((p) => p.status === 'wanted' && !p.is_rogue).length,
     terminated: allPlayers.filter((p) => p.status === 'terminated').length,
     rogue: allPlayers.filter((p) => p.is_rogue && p.status !== 'terminated').length,
   }
