@@ -22,6 +22,7 @@ export default function EliminationClient() {
   const [warTargets, setWarTargets] = useState<{ teamName: string; players: Player[] }[]>([])
   const [double0Targets, setDouble0Targets] = useState<Player[]>([])
   const [rogueTargets, setRogueTargets] = useState<Player[]>([])
+  const [rogueAllTargets, setRogueAllTargets] = useState<Player[]>([])
   const [openTargets, setOpenTargets] = useState<Player[]>([])
   const [amnestyActive, setAmnestyActive] = useState(false)
   const [holdsGoldenGun, setHoldsGoldenGun] = useState(false)
@@ -46,6 +47,7 @@ export default function EliminationClient() {
     setWarTargets(data.warTargets ?? [])
     setDouble0Targets(data.double0Targets ?? [])
     setRogueTargets(data.rogueTargets ?? [])
+    setRogueAllTargets(data.rogueAllTargets ?? [])
     setOpenTargets(data.openTargets ?? [])
     setHoldsGoldenGun(data.holdsGoldenGun ?? false)
     setGoldenGunTargets(data.goldenGunTargets ?? [])
@@ -103,7 +105,7 @@ export default function EliminationClient() {
           <div>
             <label className="block text-sm text-zinc-300 mb-2">Target player</label>
             {targetPlayers.length === 0 && warTargets.length === 0 && double0Targets.length === 0 &&
-             rogueTargets.length === 0 && openTargets.length === 0 && goldenGunTargets.length === 0 ? (
+             rogueTargets.length === 0 && rogueAllTargets.length === 0 && openTargets.length === 0 && goldenGunTargets.length === 0 ? (
               <p className="text-zinc-500 text-sm">No eligible targets right now.</p>
             ) : (
               <select
@@ -137,6 +139,13 @@ export default function EliminationClient() {
                   <optgroup label="Rogue Agents">
                     {rogueTargets.map((p) => (
                       <option key={p.id} value={p.id}>{p.name} (Rogue)</option>
+                    ))}
+                  </optgroup>
+                )}
+                {rogueAllTargets.length > 0 && (
+                  <optgroup label="All Players (Rogue)">
+                    {rogueAllTargets.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </optgroup>
                 )}
