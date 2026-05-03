@@ -1,5 +1,7 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+For new members of MI6: see `docs/setup-handoff.md` for instructions.
+
 ## Getting Started
 
 First, run the development server:
